@@ -102,7 +102,7 @@ function consumePreview(token) {
 }
 
 /**
- * Sanitize name/desc fields inside a taskUpdates array in-place.
+ * Sanitize name/desc fields and reshape a taskUpdates array for TodoService.
  * @param {Array<{taskId: string, name?: string, desc?: string, statusCode?: number}>} taskUpdates
  * @returns {Array<{taskId: string, updates: Object}>} formatted for TodoService.batchUpdateTasks
  */
@@ -241,9 +241,13 @@ const HANDLERS = Object.freeze({
     },
 
     batch_update_date_lists: async ({ dateListUpdates }) => {
-        await TodoService.batchUpdateDateListNames(dateListUpdates);
+        const sanitized = dateListUpdates.map((entry) => ({
+            dateId: entry.dateId,
+            name: sanitizeName(entry.name),
+        }));
+        await TodoService.batchUpdateDateListNames(sanitized);
         await refreshUI();
-        return { renamed: dateListUpdates.length };
+        return { renamed: sanitized.length };
     },
 
     preview_overwrite_date_lists: async ({ dateListOverwrites }) => {
@@ -274,15 +278,86 @@ const HANDLERS = Object.freeze({
         return { diffs, previewToken, expiresInMs: PREVIEW_TOKEN_TTL_MS };
     },
 
+    batch_create_date_lists: async ({ dateLists }) => {
+        const results = [];
+        for (const { dateId, name } of dateLists) {
+            const existing = await TodoService.getDateList(dateId);
+            if (existing) {
+                results.push({ dateId, skipped: true, reason: 'already exists' });
+                continue;
+            }
+            await TodoService.saveDateList({
+                id: dateId,
+                name: name ? sanitizeName(name) : formatDateListName(dateId),
+                taskList: [],
+                statusCode: STATUS_TODO,
+            });
+            results.push({ dateId, created: true });
+        }
+        await refreshUI();
+        return { results, created: results.filter((r) => r.created).length };
+    },
+
+    batch_add_tasks: async ({ dateId, tasks }) => {
+        const baseId = Date.now();
+        const builtTasks = tasks.map((t, i) => ({
+            id: `Task-${dateId}-${baseId + i}`,
+            name: sanitizeName(t.name),
+            statusCode: t.statusCode ?? STATUS_TODO,
+            desc: t.desc ? sanitizeDesc(t.desc) : '',
+        }));
+
+        const result = await TodoService.batchAddTasks(dateId, builtTasks);
+        await refreshUI();
+        return { addedCount: builtTasks.length, dateId, dateListCreated: result.dateListCreated };
+    },
+
+    batch_create_date_lists_with_tasks: async ({ dateLists }) => {
+        const results = [];
+        let idCounter = Date.now();
+
+        for (const { dateId, name, taskList } of dateLists) {
+            const existing = await TodoService.getDateList(dateId);
+            if (existing) {
+                results.push({ dateId, skipped: true, reason: 'already exists' });
+                continue;
+            }
+
+            const baseId = idCounter;
+            idCounter += taskList.length;
+            const builtTasks = taskList.map((t, i) => ({
+                id: `Task-${dateId}-${baseId + i}`,
+                name: sanitizeName(t.name),
+                statusCode: t.statusCode ?? STATUS_TODO,
+                desc: t.desc ? sanitizeDesc(t.desc) : '',
+            }));
+
+            await TodoService.saveDateList({
+                id: dateId,
+                name: name ? sanitizeName(name) : formatDateListName(dateId),
+                taskList: builtTasks,
+                statusCode: STATUS_TODO,
+            });
+            results.push({ dateId, created: true, taskCount: builtTasks.length });
+        }
+
+        await refreshUI();
+        return { results, created: results.filter((r) => r.created).length };
+    },
+
     confirm_overwrite_date_lists: async ({ previewToken }) => {
         const dateListOverwrites = consumePreview(previewToken);
         const results = [];
+
+        // Single timestamp base for all generated IDs — incremented across date lists
+        let idCounter = Date.now();
 
         for (const { dateId, taskList } of dateListOverwrites) {
             const existing = await TodoService.getDateList(dateId);
 
             // Build full task objects with generated IDs
-            const baseId = Date.now();
+            const baseId = idCounter;
+            idCounter += taskList.length;
             const newTaskList = taskList.map((t, i) => ({
                 id: `Task-${dateId}-${baseId + i}`,
                 name: sanitizeName(t.name),
@@ -319,14 +394,6 @@ const STATUS_STATES = Object.freeze(['connected', 'connecting', 'disconnected'])
  * @param {string} [tooltip] - optional override for the tooltip text
  */
 function setStatus(state, tooltip) {
-    const text = tooltip ?? `MCP: ${state}`;
-
-    // Persist to localStorage so the settings page can read the live state
-    try {
-        localStorage.setItem('mcp-state', state);
-        localStorage.setItem('mcp-state-text', text);
-    } catch { /* quota — non-critical */ }
-
     const el = document.getElementById('mcp-status-indicator');
     if (!el) return;
 
@@ -334,7 +401,7 @@ function setStatus(state, tooltip) {
     el.classList.add(state);
 
     const tip = el.querySelector('.btn-title');
-    if (tip) tip.textContent = text;
+    if (tip) tip.textContent = tooltip ?? `MCP: ${state}`;
 }
 
 // ─── WebSocket Client ────────────────────────────────────────

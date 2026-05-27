@@ -443,6 +443,45 @@ export const TodoService = {
     },
 
     /**
+     * Batch-add multiple tasks to a single date list in ONE transaction.
+     * Auto-creates the date list if it doesn't exist.
+     *
+     * @param {string} dateId
+     * @param {Array<{id: string, name: string, statusCode: number, desc: string}>} tasks
+     * @param {string} [dateName] - human-readable name for auto-created date lists
+     * @returns {Promise<{dateListCreated: boolean, addedCount: number}>}
+     */
+    async batchAddTasks(dateId, tasks, dateName = formatDateListName(dateId)) {
+        if (!tasks?.length) return { dateListCreated: false, addedCount: 0 };
+
+        try {
+            return await withTasksStore(async (store) => {
+                const existing = await getFromStore(store, dateId);
+                const dateList = existing ?? {
+                    id: dateId,
+                    name: dateName,
+                    taskList: [],
+                    statusCode: STATUS_TODO,
+                };
+
+                for (const task of tasks) {
+                    dateList.taskList.push(normalizeTaskRecord(task));
+                }
+
+                await putToStore(store, dateList);
+
+                return {
+                    dateListCreated: !existing,
+                    addedCount: tasks.length,
+                };
+            });
+        } catch (error) {
+            console.error("TodoService.batchAddTasks — failed:", error);
+            throw error;
+        }
+    },
+
+    /**
      * Move tasks across date lists in one transaction so content and metadata
      * are preserved together with the source/target write.
      * @param {string} sourceDateId

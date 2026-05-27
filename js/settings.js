@@ -304,47 +304,24 @@ document.getElementById('mcp-ws-save-btn')?.addEventListener('click', () => {
 });
 
 /**
- * Apply a connection state to the settings status indicator.
- * @param {'connected' | 'connecting' | 'disconnected'} state
- * @param {string} text - human-readable status label
+ * Temporarily override the MCP status indicator for save/validation feedback.
+ * The live connection state is managed by mcp-status.js (loaded on this page).
+ * @param {'saved' | 'invalid'} action
  */
-function applyMcpStatus(state, text) {
+function updateMcpStatus(action) {
     const indicator = document.getElementById('mcp-status-indicator');
     const label = indicator?.querySelector('.mcp-status-label');
     if (!indicator || !label) return;
 
     indicator.classList.remove('connected', 'connecting', 'disconnected');
-    indicator.classList.add(state);
-    label.textContent = text;
-}
-
-/**
- * Update status indicator — handles local overrides ('saved', 'invalid')
- * and falls through to the live state persisted by mcp-bridge.js.
- * @param {'saved' | 'invalid' | 'live'} action
- */
-function updateMcpStatus(action) {
     if (action === 'saved') {
-        applyMcpStatus('connected', 'URL saved — refresh todo page to reconnect');
-        return;
+        indicator.classList.add('connected');
+        label.textContent = 'URL saved — refresh todo page to reconnect';
+    } else if (action === 'invalid') {
+        indicator.classList.add('disconnected');
+        label.textContent = 'Invalid URL';
     }
-    if (action === 'invalid') {
-        applyMcpStatus('disconnected', 'Invalid URL');
-        return;
-    }
-    // Read live state from localStorage (written by mcp-bridge.js on index.html)
-    const state = localStorage.getItem('mcp-state') || 'disconnected';
-    const text = localStorage.getItem('mcp-state-text') || 'MCP: disconnected';
-    applyMcpStatus(state, text);
 }
-
-// Show the live connection state on page load
-updateMcpStatus('live');
-
-// Update in real-time when the todo page (mcp-bridge.js) writes to localStorage
-window.addEventListener('storage', (e) => {
-    if (e.key === 'mcp-state') updateMcpStatus('live');
-});
 
 // ─── Data ────────────────────────────────────────────────────
 

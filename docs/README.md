@@ -101,7 +101,7 @@ The app includes a **Model Context Protocol (MCP)** integration that lets you ma
 
 ### How It Works
 
-1. **MCP Server** — a Node.js process (`mcp-server/`) that Claude Desktop connects to via stdio transport. It exposes 15 tools: `get_all_date_lists`, `get_date_list`, `get_tasks_by_status`, `create_date_list`, `add_task`, `update_task`, `mark_task_done`, `mark_all_done`, `delete_task`, `move_tasks`, `batch_update_tasks`, `batch_update_tasks_across_dates`, `batch_update_date_lists`, `preview_overwrite_date_lists`, and `confirm_overwrite_date_lists`.
+1. **MCP Server** — a Node.js process (`mcp-server/`) that Claude Desktop connects to via stdio transport. It exposes 18 tools: `get_all_date_lists`, `get_date_list`, `get_tasks_by_status`, `create_date_list`, `add_task`, `update_task`, `mark_task_done`, `mark_all_done`, `delete_task`, `move_tasks`, `batch_update_tasks`, `batch_update_tasks_across_dates`, `batch_update_date_lists`, `preview_overwrite_date_lists`, `confirm_overwrite_date_lists`, `batch_create_date_lists`, `batch_add_tasks`, and `batch_create_date_lists_with_tasks`.
 2. **WebSocket Bridge** — the browser tab opens a WebSocket connection (default `ws://127.0.0.1:8765`) to the MCP server. When Claude sends a command (e.g., "add a task called 'Buy groceries' to today's list"), the server forwards the operation to the browser via WebSocket.
 3. **IndexedDB Sync** — the browser-side bridge (`mcp-bridge.js`) executes the operation through `TodoService` — the same data layer the UI uses — ensuring consistency. After every write, `refreshUI()` is called so you see the change in real time.
 
@@ -120,6 +120,9 @@ The MCP server includes batch tools for efficient bulk operations:
 - **`batch_update_tasks_across_dates`** — update tasks spanning multiple date lists in one call (max 200 entries).
 - **`batch_update_date_lists`** — rename multiple date lists at once (max 50 entries).
 - **`preview_overwrite_date_lists`** / **`confirm_overwrite_date_lists`** — a two-step flow for replacing entire task arrays. The preview step returns a diff and a one-time token (60 s TTL). Claude must show the diff to you and get your explicit approval before calling confirm. This prevents accidental data loss.
+- **`batch_create_date_lists`** — create multiple empty date lists at once (max 50). Skips existing.
+- **`batch_add_tasks`** — add multiple new tasks to a single date list (max 100). Auto-creates the date list if needed.
+- **`batch_create_date_lists_with_tasks`** — create date lists and populate them with tasks in one call (max 20 lists, 200 tasks). Skips existing lists.
 
 ### MCP Server Setup
 
