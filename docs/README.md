@@ -101,7 +101,7 @@ The app includes a **Model Context Protocol (MCP)** integration that lets you ma
 
 ### How It Works
 
-1. **MCP Server** — a Node.js process (`mcp-server/`) that Claude Desktop connects to via stdio transport. It exposes 10 tools: `get_all_date_lists`, `get_date_list`, `get_tasks_by_status`, `create_date_list`, `add_task`, `update_task`, `mark_task_done`, `mark_all_done`, `delete_task`, and `move_tasks`.
+1. **MCP Server** — a Node.js process (`mcp-server/`) that Claude Desktop connects to via stdio transport. It exposes 15 tools: `get_all_date_lists`, `get_date_list`, `get_tasks_by_status`, `create_date_list`, `add_task`, `update_task`, `mark_task_done`, `mark_all_done`, `delete_task`, `move_tasks`, `batch_update_tasks`, `batch_update_tasks_across_dates`, `batch_update_date_lists`, `preview_overwrite_date_lists`, and `confirm_overwrite_date_lists`.
 2. **WebSocket Bridge** — the browser tab opens a WebSocket connection (default `ws://127.0.0.1:8765`) to the MCP server. When Claude sends a command (e.g., "add a task called 'Buy groceries' to today's list"), the server forwards the operation to the browser via WebSocket.
 3. **IndexedDB Sync** — the browser-side bridge (`mcp-bridge.js`) executes the operation through `TodoService` — the same data layer the UI uses — ensuring consistency. After every write, `refreshUI()` is called so you see the change in real time.
 
@@ -111,6 +111,15 @@ The app includes a **Model Context Protocol (MCP)** integration that lets you ma
 2. Enter the WebSocket URL (default: `ws://127.0.0.1:8765`).
 3. Click **Save**. The URL is validated and stored in `localStorage`.
 4. The status indicator shows the current connection state: *Connected* (green), *Connecting* (yellow), or *Disconnected* (red).
+
+### Batch & Overwrite Tools
+
+The MCP server includes batch tools for efficient bulk operations:
+
+- **`batch_update_tasks`** — update multiple tasks within a single date list in one call (max 100 entries).
+- **`batch_update_tasks_across_dates`** — update tasks spanning multiple date lists in one call (max 200 entries).
+- **`batch_update_date_lists`** — rename multiple date lists at once (max 50 entries).
+- **`preview_overwrite_date_lists`** / **`confirm_overwrite_date_lists`** — a two-step flow for replacing entire task arrays. The preview step returns a diff and a one-time token (60 s TTL). Claude must show the diff to you and get your explicit approval before calling confirm. This prevents accidental data loss.
 
 ### MCP Server Setup
 

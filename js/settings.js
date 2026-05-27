@@ -303,20 +303,48 @@ document.getElementById('mcp-ws-save-btn')?.addEventListener('click', () => {
     }
 });
 
-function updateMcpStatus(state) {
+/**
+ * Apply a connection state to the settings status indicator.
+ * @param {'connected' | 'connecting' | 'disconnected'} state
+ * @param {string} text - human-readable status label
+ */
+function applyMcpStatus(state, text) {
     const indicator = document.getElementById('mcp-status-indicator');
     const label = indicator?.querySelector('.mcp-status-label');
     if (!indicator || !label) return;
 
     indicator.classList.remove('connected', 'connecting', 'disconnected');
-    if (state === 'saved') {
-        indicator.classList.add('connected');
-        label.textContent = 'URL saved — refresh todo page to reconnect';
-    } else if (state === 'invalid') {
-        indicator.classList.add('disconnected');
-        label.textContent = 'Invalid URL';
-    }
+    indicator.classList.add(state);
+    label.textContent = text;
 }
+
+/**
+ * Update status indicator — handles local overrides ('saved', 'invalid')
+ * and falls through to the live state persisted by mcp-bridge.js.
+ * @param {'saved' | 'invalid' | 'live'} action
+ */
+function updateMcpStatus(action) {
+    if (action === 'saved') {
+        applyMcpStatus('connected', 'URL saved — refresh todo page to reconnect');
+        return;
+    }
+    if (action === 'invalid') {
+        applyMcpStatus('disconnected', 'Invalid URL');
+        return;
+    }
+    // Read live state from localStorage (written by mcp-bridge.js on index.html)
+    const state = localStorage.getItem('mcp-state') || 'disconnected';
+    const text = localStorage.getItem('mcp-state-text') || 'MCP: disconnected';
+    applyMcpStatus(state, text);
+}
+
+// Show the live connection state on page load
+updateMcpStatus('live');
+
+// Update in real-time when the todo page (mcp-bridge.js) writes to localStorage
+window.addEventListener('storage', (e) => {
+    if (e.key === 'mcp-state') updateMcpStatus('live');
+});
 
 // ─── Data ────────────────────────────────────────────────────
 

@@ -489,6 +489,31 @@ export const TodoService = {
     },
 
     /**
+     * Batch-rename multiple date lists in a single readwrite transaction.
+     *
+     * @param {Array<{dateId: string, name: string}>} updates
+     *        Each entry: { dateId, name (new human-readable name) }
+     */
+    async batchUpdateDateListNames(updates) {
+        if (!updates?.length) return;
+
+        try {
+            await withTasksStore(async (store) => {
+                for (const { dateId, name } of updates) {
+                    const dateList = await getFromStore(store, dateId);
+                    if (!dateList) continue;
+
+                    dateList.name = String(name);
+                    await putToStore(store, dateList);
+                }
+            });
+        } catch (error) {
+            console.error("TodoService.batchUpdateDateListNames — failed:", error);
+            throw error;
+        }
+    },
+
+    /**
      * Normalize legacy task data in-place. This repairs escaped task names
      * without needing a DB schema migration.
      * Runs all reads + writes inside a single IDB transaction for performance.

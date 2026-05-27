@@ -52,6 +52,70 @@ const sanitizeName = (s) => normalizeTaskName(String(s ?? ''));
  */
 const sanitizeDesc = (s) => sanitizeRichHTML(String(s ?? ''));
 
+// ─── Preview Token Store ────────────────────────────────────
+// Stores pending overwrite payloads keyed by a one-time UUID token.
+// Each entry has a 60 s TTL and is deleted after use or expiry.
+
+/** @type {Map<string, { payload: Array, timer: number }>} */
+const _previewTokens = new Map();
+
+const PREVIEW_TOKEN_TTL_MS = 60_000;
+
+/**
+ * Generate a random UUID token (crypto.randomUUID where available, fallback
+ * to a simple v4-like construction for older browsers).
+ * @returns {string}
+ */
+function generateToken() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    // Fallback — not cryptographically secure but sufficient for a localhost token
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    });
+}
+
+/**
+ * Store a preview payload and return its one-time token.
+ * @param {Array} payload - the dateListOverwrites array to store
+ * @returns {string} previewToken
+ */
+function storePreview(payload) {
+    const token = generateToken();
+    const timer = setTimeout(() => _previewTokens.delete(token), PREVIEW_TOKEN_TTL_MS);
+    _previewTokens.set(token, { payload, timer });
+    return token;
+}
+
+/**
+ * Consume a preview token and return the stored payload.
+ * @param {string} token
+ * @returns {Array}
+ * @throws {Error} if the token is invalid or expired
+ */
+function consumePreview(token) {
+    const entry = _previewTokens.get(token);
+    if (!entry) throw new Error('Invalid or expired previewToken — please call preview_overwrite_date_lists again');
+    clearTimeout(entry.timer);
+    _previewTokens.delete(token);
+    return entry.payload;
+}
+
+/**
+ * Sanitize name/desc fields inside a taskUpdates array in-place.
+ * @param {Array<{taskId: string, name?: string, desc?: string, statusCode?: number}>} taskUpdates
+ * @returns {Array<{taskId: string, updates: Object}>} formatted for TodoService.batchUpdateTasks
+ */
+function sanitizeTaskUpdates(taskUpdates) {
+    return taskUpdates.map(({ taskId, name, statusCode, desc }) => {
+        const updates = {};
+        if (name !== undefined) updates.name = sanitizeName(name);
+        if (statusCode !== undefined) updates.statusCode = statusCode;
+        if (desc !== undefined) updates.desc = sanitizeDesc(desc);
+        return { taskId, updates };
+    });
+}
+
 // ─── Handlers ────────────────────────────────────────────────
 // Each handler receives the params object and returns a JSON-serializable
 // result. Writes must call refreshUI() before returning.
@@ -147,6 +211,98 @@ const HANDLERS = Object.freeze({
         await refreshUI();
         return result.moved === 0 ? 'No matching tasks found in source' : result;
     },
+
+    batch_update_tasks: async ({ dateId, taskUpdates }) => {
+        const sanitized = sanitizeTaskUpdates(taskUpdates);
+        await TodoService.batchUpdateTasks(dateId, sanitized);
+        await refreshUI();
+        return { updated: sanitized.length, dateId };
+    },
+
+    batch_update_tasks_across_dates: async ({ taskUpdates }) => {
+        // Group entries by dateId so each date list gets one batchUpdate call
+        /** @type {Map<string, Array>} */
+        const grouped = new Map();
+        for (const entry of taskUpdates) {
+            const { dateId, ...rest } = entry;
+            if (!grouped.has(dateId)) grouped.set(dateId, []);
+            grouped.get(dateId).push(rest);
+        }
+
+        const results = [];
+        for (const [dateId, entries] of grouped) {
+            const sanitized = sanitizeTaskUpdates(entries);
+            await TodoService.batchUpdateTasks(dateId, sanitized);
+            results.push({ dateId, updated: sanitized.length });
+        }
+
+        await refreshUI();
+        return { results, totalUpdated: taskUpdates.length };
+    },
+
+    batch_update_date_lists: async ({ dateListUpdates }) => {
+        await TodoService.batchUpdateDateListNames(dateListUpdates);
+        await refreshUI();
+        return { renamed: dateListUpdates.length };
+    },
+
+    preview_overwrite_date_lists: async ({ dateListOverwrites }) => {
+        // Read-only: compute diff for each date list and store the payload
+        const diffs = [];
+        for (const { dateId, taskList } of dateListOverwrites) {
+            const existing = await TodoService.getDateList(dateId);
+            const currentNames = (existing?.taskList ?? []).map((t) => t.name);
+            const proposedNames = taskList.map((t) => sanitizeName(t.name));
+
+            // Simple set-based diff on task names
+            const currentSet = new Set(currentNames);
+            const proposedSet = new Set(proposedNames);
+            const added = proposedNames.filter((n) => !currentSet.has(n));
+            const removed = currentNames.filter((n) => !proposedSet.has(n));
+
+            diffs.push({
+                dateId,
+                exists: !!existing,
+                currentTaskCount: currentNames.length,
+                proposedTaskCount: proposedNames.length,
+                added,
+                removed,
+            });
+        }
+
+        const previewToken = storePreview(dateListOverwrites);
+        return { diffs, previewToken, expiresInMs: PREVIEW_TOKEN_TTL_MS };
+    },
+
+    confirm_overwrite_date_lists: async ({ previewToken }) => {
+        const dateListOverwrites = consumePreview(previewToken);
+        const results = [];
+
+        for (const { dateId, taskList } of dateListOverwrites) {
+            const existing = await TodoService.getDateList(dateId);
+
+            // Build full task objects with generated IDs
+            const baseId = Date.now();
+            const newTaskList = taskList.map((t, i) => ({
+                id: `Task-${dateId}-${baseId + i}`,
+                name: sanitizeName(t.name),
+                statusCode: t.statusCode ?? STATUS_TODO,
+                desc: t.desc ? sanitizeDesc(t.desc) : '',
+            }));
+
+            await TodoService.saveDateList({
+                id: dateId,
+                name: existing?.name ?? formatDateListName(dateId),
+                taskList: newTaskList,
+                statusCode: existing?.statusCode ?? STATUS_TODO,
+            });
+
+            results.push({ dateId, replaced: newTaskList.length, created: !existing });
+        }
+
+        await refreshUI();
+        return { results };
+    },
 });
 
 // ─── Status Indicator ────────────────────────────────────────
@@ -163,6 +319,14 @@ const STATUS_STATES = Object.freeze(['connected', 'connecting', 'disconnected'])
  * @param {string} [tooltip] - optional override for the tooltip text
  */
 function setStatus(state, tooltip) {
+    const text = tooltip ?? `MCP: ${state}`;
+
+    // Persist to localStorage so the settings page can read the live state
+    try {
+        localStorage.setItem('mcp-state', state);
+        localStorage.setItem('mcp-state-text', text);
+    } catch { /* quota — non-critical */ }
+
     const el = document.getElementById('mcp-status-indicator');
     if (!el) return;
 
@@ -170,7 +334,7 @@ function setStatus(state, tooltip) {
     el.classList.add(state);
 
     const tip = el.querySelector('.btn-title');
-    if (tip) tip.textContent = tooltip ?? `MCP: ${state}`;
+    if (tip) tip.textContent = text;
 }
 
 // ─── WebSocket Client ────────────────────────────────────────
