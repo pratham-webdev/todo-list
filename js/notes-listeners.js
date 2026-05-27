@@ -7,12 +7,17 @@ import {
     deletePage,
     saveText,
     addSections,
+    moveSection,
+    deleteSection,
     findPage,
     renderNotesDetailHTML,
-    exportNotesJSON,
-    importNotesJSON,
+    openMdModal,
+    applyMdToSection,
+    closeMdModal,
+    renderMdPreview,
+    DEFAULT_NOTE_ID,
 } from "./notes-detail.js";
-import { replaceURLs, escapeHTML, isValidURL, sanitizeRichHTML } from "./utils.js";
+import { escapeHTML, isValidURL, sanitizeRichHTML, autoLinkTextNodes } from "./utils.js";
 
 // ─── Cached DOM references ───────────────────────────────────
 
@@ -22,7 +27,8 @@ const notesContainer = document.getElementById('notes-detail-container');
  * Attach a delegated event listener to a parent element.
  * @param {string} eventType
  * @param {string} selector
- * @param {Function} handler - receives (event, matchedElement)
+ * @param {(event: Event, matchedElement: HTMLElement) => void} handler
+ * @returns {void}
  */
 function delegate(eventType, selector, handler) {
     notesContainer.addEventListener(eventType, (e) => {
@@ -33,27 +39,39 @@ function delegate(eventType, selector, handler) {
     });
 }
 
-/** Helper: get the notes editor element */
+/**
+ * Helper: get the notes editor element.
+ * @returns {HTMLElement|null}
+ */
 function getEditor() {
     return document.getElementById('notes-detail-area');
 }
 
-/** Helper: toggle a toolbar sub-panel */
+/**
+ * Toggle a toolbar sub-panel's visibility via CSS class.
+ * @param {string} panelId - DOM id of the panel element
+ * @param {string} toggleSelector - CSS selector for the toggle button
+ * @returns {void}
+ */
 function togglePanel(panelId, toggleSelector) {
     const panel = document.getElementById(panelId);
-    if (panel) panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+    if (panel) panel.classList.toggle('panel-open');
     document.querySelector(toggleSelector)?.classList.toggle('btn-no-bg-gray-active');
 }
 
 // ─── Auto-Save (debounced) ───────────────────────────────────
 
+/** @type {number|null} Debounce timer ID for auto-save */
 let _saveTimer = null;
 // Save notes content when the editor loses focus (debounced 500ms)
+// Auto-link bare URLs before persisting.
 delegate('focusout', '#notes-detail-area', () => {
     clearTimeout(_saveTimer);
     _saveTimer = setTimeout(() => {
         const editor = getEditor();
-        if (editor) saveText(editor.getAttribute('value'), true, false);
+        if (!editor) return;
+        autoLinkTextNodes(editor);
+        saveText(editor.getAttribute('value'), true, false);
     }, 500);
 });
 
@@ -77,8 +95,11 @@ delegate('mousedown', '.background-box', (e) => {
 
 /**
  * Insert a styled DOM node at the current text selection.
+ * Note: colour/background cases apply inline styles intentionally — these are
+ * user-driven formatting actions on contenteditable content.
  * @param {'heading'|'color'|'background'} formatType
  * @param {string} value - tag name (e.g. 'h2') or CSS colour value
+ * @returns {void}
  */
 function insertFormattedNode(formatType, value) {
     try {
@@ -114,12 +135,17 @@ function insertFormattedNode(formatType, value) {
 
 // ─── Heading / Colour / Background Insertion ─────────────────
 
-/** Helper: save + close panel after formatting action */
+/**
+ * Save the editor content and close a toolbar panel.
+ * @param {string} panelId - DOM id of the panel element
+ * @param {string} toggleSelector - CSS selector for the toggle button
+ * @returns {void}
+ */
 function saveAndClosePanel(panelId, toggleSelector) {
     const editor = getEditor();
     if (editor) saveText(editor.getAttribute('value'), true, false);
     const panel = document.getElementById(panelId);
-    if (panel) panel.style.display = 'none';
+    if (panel) panel.classList.remove('panel-open');
     document.querySelector(toggleSelector)?.classList.remove('btn-no-bg-gray-active');
 }
 
@@ -174,8 +200,8 @@ delegate('click', '.hide-section', (e, el) => {
     const sectionEl = document.getElementById(sectionId);
     if (!sectionEl) return;
 
-    const isHidden = sectionEl.style.display === 'none';
-    sectionEl.style.display = isHidden ? '' : 'none';
+    const isHidden = sectionEl.classList.contains('hidden');
+    sectionEl.classList.toggle('hidden');
 
     // Update the icon
     const icon = el.querySelector('i');
@@ -191,7 +217,7 @@ delegate('click', '.hide-section', (e, el) => {
 
 // Click on a section toggle label to scroll to that section
 delegate('click', '.notes-detail-section-toggle-container > [value]', (e, el) => {
-    if (e.target.closest('.hide-section') || e.target.closest('.add-sections-box')) return;
+    if (e.target.closest('.hide-section') || e.target.closest('.add-sections-box') || e.target.closest('.edit-section-md')) return;
     const sectionId = el.getAttribute('value');
     const sectionEl = document.getElementById(sectionId);
     if (sectionEl) sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -223,39 +249,70 @@ delegate('click', '.page-tab', (e, el) => {
     renderNotesDetailHTML(pageObj);
 });
 
+// ─── Page Context Menu (cursor-positioned) ──────────────────
+
+const pageContextMenu = document.getElementById('page-context-menu');
+const sectionContextMenu = document.getElementById('section-context-menu');
+let _ctxPageId = null;
+let _ctxPageName = '';
+
+/** Hide all context menus on the notes page. */
+function closeAllContextMenus() {
+    pageContextMenu.classList.remove('open');
+    sectionContextMenu.classList.remove('open');
+}
+
 // Right-click context menu for page tabs
 delegate('contextmenu', '.page-tab', (e, el) => {
     e.preventDefault();
-    const menuEl = el.nextElementSibling;
-    const isOpen = menuEl?.classList.contains('section-open');
-    // Close all open menus
-    document.querySelectorAll('.section-open').forEach(m => {
-        m.style.display = 'none';
-        m.classList.remove('section-open');
-    });
-    if (!isOpen && menuEl) {
-        menuEl.style.display = 'block';
-        menuEl.classList.add('section-open');
+    closeAllContextMenus();
+    _ctxPageId = el.id;
+    _ctxPageName = el.textContent.trim();
+
+    // Hide delete option for the default page
+    const deleteBtn = document.getElementById('ctx-page-delete');
+    if (deleteBtn) {
+        deleteBtn.closest('.list-group-item').classList.toggle(
+            'hidden', _ctxPageId === DEFAULT_NOTE_ID
+        );
     }
+
+    pageContextMenu.style.setProperty('--x', e.pageX + 'px');
+    pageContextMenu.style.setProperty('--y', e.pageY + 'px');
+    pageContextMenu.classList.add('open');
 });
 
-// Delete a page
-delegate('click', '.delete-page', (e, el) => {
-    const pageId = el.parentElement.getAttribute('value');
-    deletePage(pageId);
-});
-
-// Rename a page
-delegate('click', '.rename-page', (e, el) => {
-    const pageId = el.parentElement.getAttribute('value');
-    const currentName = el.parentElement.previousElementSibling?.textContent.trim() || '';
-    const newName = prompt('Rename the page', currentName);
+// Page context menu — Rename
+document.getElementById('ctx-page-rename')?.addEventListener('click', () => {
+    if (!_ctxPageId) return;
+    const newName = prompt('Rename the page', _ctxPageName);
     if (newName !== null) {
-        saveText(pageId, false, newName);
+        saveText(_ctxPageId, false, newName);
     }
+    closeAllContextMenus();
 });
 
-// ─── File Export ─────────────────────────────────────────────
+// Page context menu — Export
+document.getElementById('ctx-page-export')?.addEventListener('click', async () => {
+    if (!_ctxPageId) return;
+    const pageObj = findPage(_ctxPageId);
+    try {
+        const handle = await getNewFileHandle(_ctxPageName);
+        await writeFile(handle, pageObj.html);
+    } catch (error) {
+        console.error('notes-listeners.js — export failed:', error);
+    }
+    closeAllContextMenus();
+});
+
+// Page context menu — Delete
+document.getElementById('ctx-page-delete')?.addEventListener('click', () => {
+    if (!_ctxPageId) return;
+    deletePage(_ctxPageId);
+    closeAllContextMenus();
+});
+
+// ─── File Export Helpers ─────────────────────────────────────
 
 /**
  * Show a "Save As" dialog and return the file handle.
@@ -284,25 +341,6 @@ async function writeFile(fileHandle, contents) {
     await writable.write(contents);
     await writable.close();
 }
-
-// Export the current page as an HTML file
-delegate('click', '.export-page', (e, el) => {
-    const pageId = el.parentElement.getAttribute('value');
-    const pageObj = findPage(pageId);
-    const pageName = el.parentElement.previousElementSibling?.textContent.trim() || '';
-
-    getNewFileHandle(pageName)
-        .then((handle) => {
-            writeFile(handle, pageObj.html);
-            document.querySelectorAll('.section-open').forEach(m => {
-                m.style.display = 'none';
-                m.classList.remove('section-open');
-            });
-        })
-        .catch((error) => {
-            console.error('notes-listeners.js — export failed:', error);
-        });
-});
 
 // ─── Notes Keyboard Shortcuts ────────────────────────────────
 
@@ -381,6 +419,9 @@ delegate('paste', '#notes-detail-area', (e) => {
         const fragment = temp.content;
         range.insertNode(fragment);
 
+        // Auto-link any bare URLs in the pasted content
+        autoLinkTextNodes(getEditor());
+
         // Collapse cursor to end of inserted content
         range.collapse(false);
         selection.removeAllRanges();
@@ -390,6 +431,127 @@ delegate('paste', '#notes-detail-area', (e) => {
     }
 });
 
-// Notes JSON Import / Export buttons
-document.getElementById('export-notes-btn')?.addEventListener('click', () => exportNotesJSON());
-document.getElementById('import-notes-btn')?.addEventListener('click', () => importNotesJSON());
+// ─── Markdown Section Modal ──────────────────────────────────
+
+// Open the markdown editor for a section
+delegate('click', '.edit-section-md', (e, el) => {
+    e.stopPropagation();
+    const toggleDiv = el.closest('[value]');
+    const sectionId = toggleDiv?.getAttribute('value');
+    if (sectionId) openMdModal(sectionId);
+});
+
+// Modal: Update button — apply markdown → HTML to section
+document.getElementById('md-section-update-btn')?.addEventListener('click', () => {
+    applyMdToSection();
+});
+
+// Modal: Cancel button — close without changes
+document.getElementById('md-section-cancel-btn')?.addEventListener('click', () => {
+    closeMdModal();
+});
+
+// Modal: Live preview on textarea input (debounced)
+/** @type {number|null} */
+let _mdPreviewTimer = null;
+document.getElementById('md-section-input')?.addEventListener('input', () => {
+    clearTimeout(_mdPreviewTimer);
+    _mdPreviewTimer = setTimeout(() => {
+        renderMdPreview();
+    }, 200);
+});
+
+// ─── Section Context Menu (cursor-positioned) ───────────────
+
+let _ctxSectionId = null;
+let _ctxSectionIndex = -1;
+
+// Right-click context menu for section toggle buttons
+delegate('contextmenu', '.section-toggle-btn', (e, el) => {
+    e.preventDefault();
+    closeAllContextMenus();
+    _ctxSectionId = el.getAttribute('value');
+    _ctxSectionIndex = Number(el.getAttribute('index'));
+
+    const sectionEl = document.getElementById(_ctxSectionId);
+    const isHidden = sectionEl?.classList.contains('hidden');
+    const totalSections = document.querySelectorAll('.sections-area').length;
+
+    // Update hide button icon/label based on current state
+    const hideBtn = document.getElementById('ctx-section-hide');
+    if (hideBtn) {
+        const icon = hideBtn.querySelector('i');
+        const label = hideBtn.querySelector('span');
+        if (icon) icon.className = isHidden ? 'fa-solid fa-eye-slash mr-2' : 'fa-solid fa-eye mr-2';
+        if (label) label.textContent = isHidden ? 'Show' : 'Hide';
+    }
+
+    // Disable move buttons at boundaries
+    const upBtn = document.getElementById('ctx-section-up');
+    const downBtn = document.getElementById('ctx-section-down');
+    if (upBtn) upBtn.disabled = _ctxSectionIndex === 0;
+    if (downBtn) downBtn.disabled = _ctxSectionIndex >= totalSections - 1;
+
+    sectionContextMenu.style.setProperty('--x', e.pageX + 'px');
+    sectionContextMenu.style.setProperty('--y', e.pageY + 'px');
+    sectionContextMenu.classList.add('open');
+});
+
+// Section context menu — Hide / Show
+document.getElementById('ctx-section-hide')?.addEventListener('click', () => {
+    if (!_ctxSectionId) return;
+    const sectionEl = document.getElementById(_ctxSectionId);
+    if (!sectionEl) { closeAllContextMenus(); return; }
+
+    sectionEl.classList.toggle('hidden');
+
+    // Update the inline eye icon on the toggle button
+    const toggleBtn = document.querySelector(`.section-toggle-btn[value="${_ctxSectionId}"]`);
+    const inlineBtn = toggleBtn?.querySelector('.hide-section');
+    if (inlineBtn) {
+        const isNowHidden = sectionEl.classList.contains('hidden');
+        const icon = inlineBtn.querySelector('i');
+        if (icon) icon.className = isNowHidden ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+        inlineBtn.classList.toggle('section-hidden', isNowHidden);
+    }
+
+    const editor = document.getElementById('notes-detail-area');
+    if (editor) saveText(editor.getAttribute('value'), true, false);
+    closeAllContextMenus();
+});
+
+// Section context menu — Markdown
+document.getElementById('ctx-section-md')?.addEventListener('click', () => {
+    if (!_ctxSectionId) return;
+    openMdModal(_ctxSectionId);
+    closeAllContextMenus();
+});
+
+// Section context menu — Move Up
+document.getElementById('ctx-section-up')?.addEventListener('click', () => {
+    if (!_ctxSectionId) return;
+    moveSection(_ctxSectionId, 'up');
+    closeAllContextMenus();
+});
+
+// Section context menu — Move Down
+document.getElementById('ctx-section-down')?.addEventListener('click', () => {
+    if (!_ctxSectionId) return;
+    moveSection(_ctxSectionId, 'down');
+    closeAllContextMenus();
+});
+
+// Section context menu — Delete
+document.getElementById('ctx-section-delete')?.addEventListener('click', () => {
+    if (!_ctxSectionId) return;
+    deleteSection(_ctxSectionId);
+    closeAllContextMenus();
+});
+
+// ─── Shared Dismiss Handler ─────────────────────────────────
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.context-menu')) {
+        closeAllContextMenus();
+    }
+});

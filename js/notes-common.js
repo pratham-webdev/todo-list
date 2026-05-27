@@ -82,6 +82,7 @@ export function createButtons(items, showSwatch = false) {
  * Cached after first call to avoid redundant string construction.
  * @returns {string} HTML string for the toolbar
  */
+/** @type {string|null} */
 let _cachedToolbarHTML = null;
 export function createRTFToolbar() {
     if (_cachedToolbarHTML) return _cachedToolbarHTML;

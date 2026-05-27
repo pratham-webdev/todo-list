@@ -13,6 +13,7 @@
         crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="css/main.css">
     <script src="js/theme-toggle.js"></script>
+    <script src="js/font-loader.js"></script>
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
@@ -36,12 +37,10 @@
                 <i class="fa-solid fa-book-open"></i>
                 <span class="btn-title">Markdown Reader</span>
             </a>
-        </div>
-        <div class="activity-bar-bottom">
-            <button id="theme-toggle-btn" class="activity-icon" type="button">
-                <i class="fa-solid fa-sun"></i>
-                <span class="btn-title">Toggle Theme</span>
-            </button>
+            <a href="settings.html" class="activity-icon">
+                <i class="fa-solid fa-gear"></i>
+                <span class="btn-title">Settings</span>
+            </a>
         </div>
     </aside>
 
@@ -67,7 +66,7 @@
                 <textarea id="md-input" placeholder="Type, paste, or drag & drop a file here..." spellcheck="false"></textarea>
             </div>
             <div class="md-preview-pane">
-                <div id="md-output" class="md-preview"></div>
+                <div id="md-output" class="prose"></div>
             </div>
         </div>
     </div>

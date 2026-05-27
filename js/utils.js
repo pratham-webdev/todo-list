@@ -93,6 +93,77 @@ export function replaceURLs(text) {
     return text.replace(URL_PATTERN, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 
+// ─── DOM-Safe Auto-Linking ───────────────────────────────────
+
+/**
+ * Walk all Text nodes under `root` and wrap bare URLs in `<a>` tags.
+ * Skips text nodes that are already inside an `<a>` element.
+ * Safe for contenteditable — mutates the DOM in-place without corrupting
+ * existing tags or attributes.
+ *
+ * @param {HTMLElement} root - the container element to scan
+ * @returns {number} count of URLs that were linked
+ */
+export function autoLinkTextNodes(root) {
+    if (!root) return 0;
+
+    let linked = 0;
+
+    try {
+        // Collect text nodes first to avoid live-NodeList mutation issues
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        /** @type {Text[]} */
+        const textNodes = [];
+        while (walker.nextNode()) textNodes.push(/** @type {Text} */ (walker.currentNode));
+
+        for (const node of textNodes) {
+            // Skip text already inside an <a> tag
+            if (node.parentElement?.closest('a')) continue;
+
+            // Reset regex state (global flag)
+            URL_PATTERN.lastIndex = 0;
+            const text = node.textContent ?? '';
+            if (!URL_PATTERN.test(text)) continue;
+
+            // Build a document fragment with linked URLs
+            URL_PATTERN.lastIndex = 0;
+            const frag = document.createDocumentFragment();
+            let lastIndex = 0;
+            let match;
+
+            while ((match = URL_PATTERN.exec(text)) !== null) {
+                // Text before the match
+                if (match.index > lastIndex) {
+                    frag.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+                }
+
+                // Create the anchor element
+                const anchor = document.createElement('a');
+                anchor.href = match[1];
+                anchor.target = '_blank';
+                anchor.rel = 'noopener noreferrer';
+                anchor.textContent = match[1];
+                frag.appendChild(anchor);
+
+                lastIndex = URL_PATTERN.lastIndex;
+                linked++;
+            }
+
+            // Remaining text after last match
+            if (lastIndex < text.length) {
+                frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+            }
+
+            // Replace the original text node with the fragment
+            node.parentNode?.replaceChild(frag, node);
+        }
+    } catch (error) {
+        console.error('utils.js — autoLinkTextNodes failed:', error);
+    }
+
+    return linked;
+}
+
 // ─── Rich-HTML Sanitization ──────────────────────────────────
 
 /** Allowed tags in rich-text content (lowercase). */
@@ -250,10 +321,157 @@ export function sanitizeRichHTML(html) {
     }
 }
 
-// ─── Rich-Content Detection ─────────────────────────────────
+// ─── Rich-HTML Structural Normalization ──────────────────────
 
 /** Tags whose mere presence counts as meaningful content. */
 const MEDIA_TAGS = new Set(['img', 'hr', 'video', 'audio', 'canvas', 'svg']);
+
+/** Void / self-closing elements that should never be removed. */
+const VOID_TAGS = new Set(['br', 'hr', 'img']);
+
+/** Elements kept even when empty (structural role). */
+const KEEP_EMPTY = new Set(['li', 'td', 'th']);
+
+/** Block-level tags (subset used for wrapper-flattening heuristic). */
+const BLOCK_TAGS = new Set([
+    'address', 'article', 'aside', 'blockquote', 'details', 'dialog', 'dd',
+    'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hgroup', 'hr', 'li',
+    'main', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'ul',
+]);
+
+/** Inline tags eligible for adjacent-run merging. */
+const MERGEABLE_INLINE = new Set([
+    'b', 'strong', 'i', 'em', 'u', 's', 'span', 'code',
+]);
+
+/**
+ * Check whether a DOM element has meaningful visible content
+ * (text, void children like `<img>`, or nested non-empty elements).
+ * @param {Element} el
+ * @returns {boolean}
+ */
+function hasVisibleContent(el) {
+    if (el.textContent?.trim().length) return true;
+    for (const tag of VOID_TAGS) {
+        if (el.querySelector(tag)) return true;
+    }
+    for (const tag of MEDIA_TAGS) {
+        if (el.querySelector(tag)) return true;
+    }
+    return false;
+}
+
+/**
+ * Check whether an element is a structural marker that should never be removed.
+ * @param {Element} el
+ * @returns {boolean}
+ */
+function isStructural(el) {
+    return el.classList?.contains('sections-area');
+}
+
+/**
+ * Return a fingerprint string of an element's `class` + `style` attributes.
+ * @param {Element} el
+ * @returns {string}
+ */
+function attrFingerprint(el) {
+    return `${el.getAttribute('class') ?? ''}|${el.getAttribute('style') ?? ''}`;
+}
+
+/**
+ * Normalize rich-HTML structure by cleaning up contenteditable browser crud.
+ * Designed to be composed with `sanitizeRichHTML`:
+ *   `normalizeRichHTML(sanitizeRichHTML(raw))`
+ *
+ * Cleanup passes (in order):
+ * 1. Remove empty leaf elements (no text, no media/void children).
+ * 2. Strip trailing `<br>` inside block elements when other content exists.
+ * 3. Flatten redundant `<div>` wrappers (no id/class) with a single block child.
+ * 4. Merge adjacent same-tag inline elements with identical style+class.
+ *
+ * @param {string} html - HTML string (ideally already sanitized)
+ * @returns {string} structurally normalized HTML string
+ */
+export function normalizeRichHTML(html) {
+    if (!html) return html ?? '';
+
+    try {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const body = doc.body;
+
+        // ── Pass 1: Remove empty leaf elements (bottom-up) ──
+        const allElements = [...body.querySelectorAll('*')].reverse();
+        for (const el of allElements) {
+            const tag = el.tagName.toLowerCase();
+            if (VOID_TAGS.has(tag)) continue;
+            if (KEEP_EMPTY.has(tag)) continue;
+            if (isStructural(el)) continue;
+            if (!hasVisibleContent(el) && el.children.length === 0) {
+                el.remove();
+            }
+        }
+
+        // ── Pass 2: Strip trailing <br> in block elements ──
+        for (const tag of BLOCK_TAGS) {
+            for (const block of body.querySelectorAll(tag)) {
+                const last = block.lastChild;
+                if (!last || last.nodeName?.toLowerCase() !== 'br') continue;
+                // Only strip if there's at least one other sibling with content
+                const hasSiblingContent = [...block.childNodes].some(
+                    (n) => n !== last && (n.textContent?.trim().length || (n.nodeType === Node.ELEMENT_NODE && VOID_TAGS.has(n.tagName?.toLowerCase())))
+                );
+                if (hasSiblingContent) last.remove();
+            }
+        }
+
+        // ── Pass 3: Flatten redundant <div> wrappers ──
+        for (const div of [...body.querySelectorAll('div')]) {
+            if (div.id || (div.className && div.className.trim())) continue;
+            if (isStructural(div)) continue;
+
+            const children = [...div.childNodes].filter(
+                (n) => !(n.nodeType === Node.TEXT_NODE && !n.textContent?.trim())
+            );
+            if (children.length === 1 && children[0].nodeType === Node.ELEMENT_NODE) {
+                const child = children[0];
+                if (BLOCK_TAGS.has(child.tagName.toLowerCase())) {
+                    div.replaceWith(child);
+                }
+            }
+        }
+
+        // ── Pass 4: Merge adjacent same-tag inline elements ──
+        for (const tag of MERGEABLE_INLINE) {
+            for (const el of body.querySelectorAll(tag)) {
+                if (!el.parentNode) continue;
+                let next = el.nextSibling;
+                while (
+                    next &&
+                    next.nodeType === Node.ELEMENT_NODE &&
+                    next.tagName?.toLowerCase() === tag &&
+                    attrFingerprint(el) === attrFingerprint(/** @type {Element} */ (next))
+                ) {
+                    // Move all children of `next` into `el`
+                    while (next.firstChild) {
+                        el.appendChild(next.firstChild);
+                    }
+                    const toRemove = next;
+                    next = next.nextSibling;
+                    toRemove.remove();
+                }
+            }
+        }
+
+        return body.innerHTML;
+    } catch (error) {
+        console.error('utils.js — normalizeRichHTML failed:', error);
+        return html;
+    }
+}
+
+// ─── Rich-Content Detection ─────────────────────────────────
 
 /**
  * Check whether an HTML string contains meaningful visible content.

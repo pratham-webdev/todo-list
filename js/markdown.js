@@ -97,9 +97,20 @@ async function loadDraft() {
         if (draft?.content) {
             mdInput.value = draft.content;
             renderPreview();
+            return;
         }
     } catch (err) {
         console.error('markdown.js — loadDraft failed:', err);
+    }
+    // No saved draft — load the welcome README as default content
+    try {
+        const res = await fetch('docs/README.md');
+        if (res.ok) {
+            mdInput.value = await res.text();
+            renderPreview();
+        }
+    } catch (err) {
+        console.error('markdown.js — welcome README fetch failed:', err);
     }
 }
 

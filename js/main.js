@@ -3,16 +3,14 @@
 // ============================================================
 
 import { TodoService } from "./todo-service.js";
-import { replaceURLs, escapeHTML, sanitizeRichHTML, hasRichContent, DATE_ID_START, DATE_ID_END, TASK_ID_OFFSET } from "./utils.js";
+import { replaceURLs, escapeHTML, sanitizeRichHTML, normalizeRichHTML, hasRichContent, DATE_ID_START, DATE_ID_END, TASK_ID_OFFSET } from "./utils.js";
 import { sortByDate, createRTFToolbar } from "./notes-common.js";
 import {
-    buildDateListsFromCsvRows,
-    buildTaskCsvRows,
-    stringifyCSV,
     normalizeTaskName,
     STATUS_TODO,
 } from "./task-helpers.js";
 import { initAutoBackup } from "./backup-scheduler.js";
+import { setMessageState } from "./toast.js";
 
 // ─── Globals (formerly in todo-variables.js) ─────────────────
 let taskArray = [];
@@ -69,19 +67,6 @@ initApp();
 // ─── UI Helpers ──────────────────────────────────────────────
 
 /**
- * Show a success or failure toast message for 4 seconds.
- * @param {'success'|'failure'} type
- * @param {string} message
- */
-function setMessageState(type, message) {
-    const messageEl = document.getElementById(`${type}-message`);
-    if (!messageEl) return;
-    messageEl.textContent = message;
-    messageEl.style.display = 'block';
-    setTimeout(() => { messageEl.style.display = 'none'; }, 4000);
-}
-
-/**
  * Count how many tasks in a list have status "Completed".
  * @param {Array<{statusCode: number}>} tasks
  * @returns {number}
@@ -121,82 +106,24 @@ function dateListChanged(prev, curr) {
     return false;
 }
 
+/** @type {string|null} Cached README markdown (fetched once) */
+let readmeCache = null;
+
 /**
- * Return the "How to Use" README as a Markdown string.
- * Rendered via marked.js when no date lists exist.
- * @returns {string}
+ * Fetch the README markdown from docs/README.md (cached after first call).
+ * @returns {Promise<string>}
  */
-function getReadmeMarkdown() {
-    return `# Welcome to Todo List & Notes
-
-Your personal productivity workspace — tasks, notes, and a Markdown reader, all in one place.
-
----
-
-## Getting Started
-
-### Create a Date List
-Click the **+** button in the activity bar (left side) to create a new date list.  
-Each date list groups tasks under a specific day.
-
-### Add Tasks
-Type a task name in the **Add Task** input field and press **Enter**.  
-Tasks start with a **To-Do** status by default.
-
-### Manage Tasks
-- **Complete** — click the circle icon next to a task
-- **Edit** — open the detail view, click the pencil icon to rename
-- **Delete** — open the detail view, click the trash icon
-- **Right-click** a task for quick actions (mark done, delete)
-- **Drag & drop** tasks between date lists
-
----
-
-## Task Detail View
-Click the detail icon on any task to open the rich text editor.  
-You can add formatted notes with:
-
-| Shortcut | Action |
-|---|---|
-| \`Tab\` | Bullet list |
-| \`Ctrl + 9\` | Numbered list |
-| \`Ctrl + K\` | Insert hyperlink |
-| \`Ctrl + Shift + C\` | Code block |
-| \`Ctrl + B\` | Bold |
-| \`Ctrl + I\` | Italic |
-| \`Ctrl + U\` | Underline |
-
-Tasks with detail notes show a **highlighted** detail icon.
-
----
-
-## Notes
-Click the **Notes** icon in the activity bar to switch to the Notes page.  
-Notes are organized into **sections** with multiple **pages** per section — great for longer-form content.
-
----
-
-## Markdown Reader
-Click the **book** icon in the activity bar to open the Markdown Reader.  
-Paste or type Markdown on the left, and see a live-rendered preview on the right.  
-You can also **open .md files** from your computer.
-
----
-
-## Import & Export
-- **Export CSV** — download all tasks as a CSV file
-- **Import CSV** — restore tasks from a previously exported CSV
-- Notes can be exported/imported as **JSON** from the Notes page
-
----
-
-## Theme
-Click the **sun/moon** icon at the bottom of the activity bar to toggle between **dark** and **light** mode.
-
----
-
-*Create your first date list to get started!*
-`;
+async function getReadmeMarkdown() {
+    if (readmeCache !== null) { return readmeCache; }
+    try {
+        const res = await fetch('docs/README.md');
+        if (!res.ok) { throw new Error(`HTTP ${res.status}`); }
+        readmeCache = await res.text();
+    } catch (err) {
+        console.error('main.js — README fetch failed:', err);
+        readmeCache = '*Create your first date list to get started!*';
+    }
+    return readmeCache;
 }
 
 /**
@@ -204,7 +131,7 @@ Click the **sun/moon** icon at the bottom of the activity bar to toggle between 
  * only re-renders date lists that have actually changed.
  * @param {Array} dateLists - array of date-list objects from IndexedDB
  */
-function renderDateList(dateLists) {
+async function renderDateList(dateLists) {
     taskArray = sortByDate(dateLists).reverse();
 
     const container = document.getElementById('date-list-container');
@@ -213,8 +140,9 @@ function renderDateList(dateLists) {
     if (taskArray.length === 0) {
         previousDateListMap.clear();
         try {
-            const readmeHtml = marked.parse(getReadmeMarkdown());
-            container.innerHTML = `<div class="readme-welcome"><div class="md-preview">${sanitizeRichHTML(readmeHtml)}</div></div>`;
+            const md = await getReadmeMarkdown();
+            const readmeHtml = marked.parse(md);
+            container.innerHTML = `<div class="readme-welcome"><div class="prose">${sanitizeRichHTML(readmeHtml)}</div></div>`;
         } catch (err) {
             console.error('main.js — README render failed:', err);
             container.innerHTML = '<p class="p-4 text-secondary">Create a date list to get started.</p>';
@@ -376,19 +304,21 @@ function buildTaskHTML(task) {
  * @param {Array} dateLists
  */
 let _prevNavFingerprint = '';
+const dateNavContent = document.getElementById('date-nav-content');
+
 function renderDateNav(dateLists) {
     // Quick fingerprint: id + completed/total for each date list
     const fingerprint = dateLists.map(d => `${d.id}:${countCompletedTasks(d.taskList)}/${d.taskList.length}`).join('|');
     if (fingerprint === _prevNavFingerprint) return;
     _prevNavFingerprint = fingerprint;
 
-    const container = document.getElementById('date-list-nav-container');
+    if (!dateNavContent) return;
 
     // Empty state
     if (dateLists.length === 0) {
-        container.innerHTML = `<div class="p-3 sidebar-empty-state">
+        dateNavContent.innerHTML = `<div class="p-3 sidebar-empty-state">
             <p class="font-semibold mb-1 sidebar-empty-state-title">Get Started</p>
-            <p>Click the <strong>+</strong> button above to create your first date list.</p>
+            <p>Pick a date and click <strong>+</strong> to create your first date list.</p>
         </div>`;
         return;
     }
@@ -440,7 +370,7 @@ function renderDateNav(dateLists) {
         </div>`);
     }
 
-    container.innerHTML = navParts.join('');
+    dateNavContent.innerHTML = navParts.join('');
 }
 
 /**
@@ -499,7 +429,7 @@ function renderTaskDetailHTML(task) {
         <div id="task-detail-body" class="offcanvas-body">
             ${createRTFToolbar()}
             <div id="task-notes-area-parent">
-                <section id="task-notes-area" contenteditable="true" value="${task.id}">
+                <section id="task-notes-area" class="prose" contenteditable="true" value="${task.id}">
                     ${task.desc}
                 </section>
             </div>
@@ -618,7 +548,7 @@ async function updateTasks(dateId, taskId, taskName, taskStatusCode, taskDetails
     if (taskDetails === true) {
         // Save sanitized rich-text HTML from the contenteditable area
         const notesArea = document.getElementById('task-notes-area');
-        updates.desc = sanitizeRichHTML(notesArea?.innerHTML ?? '');
+        updates.desc = normalizeRichHTML(sanitizeRichHTML(notesArea?.innerHTML ?? ''));
     }
 
     try {
@@ -800,106 +730,6 @@ async function markAllAsDone(dateId) {
     }
 }
 
-// ─── CSV Import / Export ─────────────────────────────────────
-
-/**
- * Export all date lists + tasks as a CSV file download.
- */
-function exportCSV() {
-    const csvRows = buildTaskCsvRows(taskArray);
-    const blob = new Blob([stringifyCSV(csvRows)], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `todo-backup-${new Date().toLocaleDateString('fr-CA')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setMessageState('success', 'CSV exported successfully!');
-}
-
-/**
- * Parse a CSV string (RFC 4180) into an array of row arrays.
- * @param {string} text
- * @returns {Array<Array<string>>}
- */
-function parseCSV(text) {
-    const rows = [];
-    let current = [];
-    let field = '';
-    let inQuotes = false;
-
-    for (let i = 0; i < text.length; i++) {
-        const ch = text[i];
-        if (inQuotes) {
-            if (ch === '"') {
-                if (text[i + 1] === '"') { field += '"'; i++; }
-                else { inQuotes = false; }
-            } else {
-                field += ch;
-            }
-        } else {
-            if (ch === '"') { inQuotes = true; }
-            else if (ch === ',') { current.push(field); field = ''; }
-            else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) {
-                current.push(field); field = '';
-                rows.push(current); current = [];
-                if (ch === '\r') i++;
-            } else {
-                field += ch;
-            }
-        }
-    }
-    // Last field / row
-    if (field || current.length) {
-        current.push(field);
-        rows.push(current);
-    }
-    return rows;
-}
-
-/**
- * Import a CSV file: parse it, write date lists to IndexedDB, and re-render.
- */
-async function importCSV() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.csv';
-    input.addEventListener('change', async () => {
-        const file = input.files[0];
-        if (!file) return;
-
-        try {
-            const text = await file.text();
-            const rows = parseCSV(text);
-            if (rows.length < 2) {
-                setMessageState('failure', 'CSV file is empty or has no data rows.');
-                return;
-            }
-
-            // Sanitize all imported task descriptions through the HTML allowlist
-            const dateLists = buildDateListsFromCsvRows(rows).map((dateList) => ({
-                ...dateList,
-                taskList: dateList.taskList.map((task) => ({
-                    ...task,
-                    desc: sanitizeRichHTML(task.desc),
-                })),
-            }));
-
-            // Write each date list to IndexedDB
-            for (const dateList of dateLists) {
-                await TodoService.saveDateList(dateList);
-            }
-
-            await refreshUI();
-            setMessageState('success', `Imported ${dateLists.length} date list(s) successfully!`);
-        } catch (error) {
-            console.error('importCSV — failed:', error);
-            setMessageState('failure', 'Error importing CSV file');
-        }
-    });
-    input.click();
-}
-
 // ─── Exports ─────────────────────────────────────────────────
 
 export {
@@ -920,7 +750,5 @@ export {
     markAllAsDone,
     createDateList,
     moveTaskBetweenDates,
-    exportCSV,
-    importCSV,
     refreshUI,
 };

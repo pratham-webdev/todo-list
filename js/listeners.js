@@ -3,32 +3,27 @@
 // ============================================================
 
 import {
-    taskArray,
     bsOffcanvas,
     createTask,
     deleteTasks,
     updateTasks,
     deleteDateList,
     findTask,
-    setMessageState,
     renderTaskDetailHTML,
     getSelectedList,
     deleteSelectedList,
     doneSelectedList,
     markAllAsDone,
     createDateList,
-    exportCSV,
-    importCSV,
     refreshUI,
     STATUS_TODO,
     STATUS_COMPLETED,
 } from "./main.js";
-import { replaceURLs, escapeHTML, isValidURL, sanitizeRichHTML, DATE_ID_START, DATE_ID_END, TASK_ID_OFFSET } from "./utils.js";
+import { replaceURLs, escapeHTML, isValidURL, sanitizeRichHTML, autoLinkTextNodes, DATE_ID_START, DATE_ID_END, TASK_ID_OFFSET } from "./utils.js";
 import { createRTFToolbar } from "./notes-common.js";
 import { formatDateListName, getLocalDateInputValue } from "./task-helpers.js";
-import { toggleAutoBackup } from "./backup-scheduler.js";
 
-//--------------------Cached DOM references---------------------
+// ─── Cached DOM References ───────────────────────────────────
 
 const dateListContainer = document.getElementById('date-list-container');
 const detailContainer = document.getElementById('task-detail-container');
@@ -51,57 +46,36 @@ function delegate(parent, eventType, selector, handler) {
     });
 }
 
-//--------------------event listeners-------------------------------------
+// ─── Event Listeners ─────────────────────────────────────────
 
-// ─── Create Popover toggle ──────────────────────────────────────
-const createPopover = document.getElementById('create-popover');
-const createToggleBtn = document.getElementById('create-toggle-btn');
-if (createToggleBtn && createPopover) {
-    createToggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        createPopover.classList.toggle('hidden');
-    });
-    document.addEventListener('click', (e) => {
-        if (!createPopover.contains(e.target) && !createToggleBtn.contains(e.target)) {
-            createPopover.classList.add('hidden');
-        }
-    });
-}
+// ─── Create Date List ────────────────────────────────────────
 
-//Creating and setting date lists
-dateInput.value = getLocalDateInputValue();
+if (dateInput) dateInput.value = getLocalDateInputValue();
 
-//+ button to create the date list
-document.getElementById('todo-date-submit').addEventListener('click', () => {
-    const inputDate = dateInput.value;
-    const inputDateName = formatDateListName(inputDate);
-
-    const alreadyExists = taskArray.some((dateItem) => dateItem.id === inputDate);
-    if (!alreadyExists) {
-        createDateList(inputDate, inputDateName);
-    } else {
-        setMessageState('failure', 'Date list already exists!');
-    }
+document.getElementById('todo-date-submit')?.addEventListener('click', () => {
+    const inputDate = dateInput?.value;
+    if (!inputDate) return;
+    createDateList(inputDate, formatDateListName(inputDate));
 });
 
-//event listener to delete date list
+// ─── Delete Date List ────────────────────────────────────────
 delegate(dateListContainer, 'click', '.todo-date-delete', (e, el) => {
     deleteDateList(el.value);
 });
 
-//event listener to mark all tasks as done
+// ─── Mark All Tasks Done ─────────────────────────────────────
 delegate(dateListContainer, 'click', '.mark-all-done-btn', (e, el) => {
     markAllAsDone(el.value);
 });
 
-//keydown 'enter' event listener to create the task item
+// ─── Create Task (Enter key) ────────────────────────────────
 delegate(dateListContainer, 'keydown', '.create-task-input', (e, el) => {
     if (e.key === 'Enter') {
         createTask(el.value.trim(), el.id.slice(11), el, '');
     }
 });
 
-//event listener to delete tasks from the delete button
+// ─── Delete Task ─────────────────────────────────────────────
 function handleTaskDelete(e, el) {
     const val = el.value;
     deleteTasks(val.slice(DATE_ID_START, DATE_ID_END), val.slice(TASK_ID_OFFSET));
@@ -110,7 +84,7 @@ function handleTaskDelete(e, el) {
 delegate(dateListContainer, 'click', '.todo-task-delete', handleTaskDelete);
 delegate(detailContainer, 'click', '.todo-task-delete', handleTaskDelete);
 
-//event listener to create the input field for editing the tasks
+// ─── Edit Task (inline) ──────────────────────────────────────
 delegate(dateListContainer, 'click', '.todo-task-edit', (e, el) => {
     const val = el.value;
     const dateId = val.slice(DATE_ID_START, DATE_ID_END);
@@ -124,7 +98,7 @@ delegate(dateListContainer, 'click', '.todo-task-edit', (e, el) => {
     document.getElementById('update-task-name')?.focus();
 });
 
-//event listener to create the input field for editing the tasks in the detail view
+// ─── Edit Task (detail view) ─────────────────────────────────
 delegate(detailContainer, 'click', '.todo-task-edit', (e, el) => {
     const val = el.value;
     const dateId = val.slice(DATE_ID_START, DATE_ID_END);
@@ -137,7 +111,7 @@ delegate(detailContainer, 'click', '.todo-task-edit', (e, el) => {
     document.getElementById('update-task-name')?.focus();
 });
 
-//event listener to take the input from the input field tasks from the edit button
+// ─── Edit Task Name (Enter / Escape) ────────────────────────
 function handleEditKeydown(e, el) {
     if (e.key === 'Enter') {
         const newName = el.value.trim();
@@ -156,7 +130,7 @@ function handleEditKeydown(e, el) {
 delegate(dateListContainer, 'keydown', '#update-task-name', handleEditKeydown);
 delegate(detailContainer, 'keydown', '#update-task-name', handleEditKeydown);
 
-//event listener to toggle checkbox completion
+// ─── Toggle Checkbox Completion ─────────────────────────────
 delegate(dateListContainer, 'click', '.todo-task-check', (e, el) => {
     const val = el.value;
     const statusCode = Number(el.getAttribute('statuscode'));
@@ -164,7 +138,7 @@ delegate(dateListContainer, 'click', '.todo-task-check', (e, el) => {
     updateTasks(val.slice(DATE_ID_START, DATE_ID_END), val.slice(TASK_ID_OFFSET), '', newStatusCode, '');
 });
 
-//event listener to create the detail view
+// ─── Open Task Detail ────────────────────────────────────────
 delegate(dateListContainer, 'click', '.todo-task-detail', (e, el) => {
     bsOffcanvas.show();
     const val = el.value;
@@ -172,7 +146,7 @@ delegate(dateListContainer, 'click', '.todo-task-detail', (e, el) => {
     detailContainer.innerHTML = renderTaskDetailHTML(taskObj);
 });
 
-// event listener to select multiple tasks
+// ─── Multi-Select Tasks ──────────────────────────────────────
 delegate(dateListContainer, 'click', '.list-group-item', (e, el) => {
     if (e.ctrlKey) {
         el.classList.toggle('list-group-item-selected');
@@ -182,19 +156,19 @@ delegate(dateListContainer, 'click', '.list-group-item', (e, el) => {
 // Open context menu on right-click
 delegate(dateListContainer, 'contextmenu', '.list-group-item', (e) => {
     e.preventDefault();
-    contextMenu.style.display = '';
-    contextMenu.style.left = e.pageX + 'px';
-    contextMenu.style.top = e.pageY + 'px';
+    contextMenu.style.setProperty('--x', e.pageX + 'px');
+    contextMenu.style.setProperty('--y', e.pageY + 'px');
+    contextMenu.classList.add('open');
 });
 
-// Dismiss context menu when clicking anywhere outside it
+// ─── Dismiss Context Menu ────────────────────────────────────
 document.addEventListener('click', (e) => {
-    if (!e.target.closest('#context-menu')) {
-        contextMenu.style.display = 'none';
+    if (!e.target.closest('.context-menu')) {
+        contextMenu.classList.remove('open');
     }
 });
 
-//--------------------Task Notes/Detail View----------------
+// ─── Task Notes / Detail View ───────────────────────────────
 
 // Helper to toggle visibility of a toolbar sub-panel
 function togglePanel(panelId, toggleSelector) {
@@ -203,13 +177,13 @@ function togglePanel(panelId, toggleSelector) {
     document.querySelector(toggleSelector)?.classList.toggle('btn-no-bg-gray-active');
 }
 
-//headings box toggle
+// ─── Headings Box Toggle ─────────────────────────────────────
 delegate(detailContainer, 'mousedown', '.headings-box', (e) => {
     e.preventDefault();
     togglePanel('headings-box-container', '.headings-box');
 });
 
-//adding headings to notes area
+// ─── Apply Heading to Notes Area ─────────────────────────────
 delegate(detailContainer, 'mousedown', '#headings-box-container button', (e, el) => {
     e.preventDefault();
     const { dateId, taskId } = getNotesTaskIds();
@@ -238,26 +212,26 @@ delegate(detailContainer, 'mousedown', '#headings-box-container button', (e, el)
     document.querySelector('.headings-box')?.classList.remove('btn-no-bg-gray-active');
 });
 
-//adding ordered list to notes area
+// ─── Insert Ordered List ─────────────────────────────────────
 delegate(detailContainer, 'click', '.ol-box', () => {
     const { dateId, taskId } = getNotesTaskIds();
     document.getElementById('task-notes-area')?.insertAdjacentHTML('beforeend', '<ol><li>An Item here</li></ol>');
     updateTasks(dateId, taskId, '', '', true);
 });
 
-//adding unordered list to notes area
+// ─── Insert Unordered List ───────────────────────────────────
 delegate(detailContainer, 'click', '.ul-box', () => {
     const { dateId, taskId } = getNotesTaskIds();
     document.getElementById('task-notes-area')?.insertAdjacentHTML('beforeend', '<ul><li>An Item here</li></ul>');
     updateTasks(dateId, taskId, '', '', true);
 });
 
-//colors box toggle
+// ─── Colors Box Toggle ──────────────────────────────────────
 delegate(detailContainer, 'click', '.colors-box', () => {
     togglePanel('colors-box-container', '.colors-box');
 });
 
-//adding color to selected font
+// ─── Apply Font Color ───────────────────────────────────────
 delegate(detailContainer, 'click', '#colors-box-container button', (e, el) => {
     const { dateId, taskId } = getNotesTaskIds();
     try {
@@ -276,12 +250,12 @@ delegate(detailContainer, 'click', '#colors-box-container button', (e, el) => {
     document.querySelector('.colors-box')?.classList.remove('btn-no-bg-gray-active');
 });
 
-//background box toggle
+// ─── Background Box Toggle ──────────────────────────────────
 delegate(detailContainer, 'click', '.background-box', () => {
     togglePanel('background-box-container', '.background-box');
 });
 
-//adding background color to selected font
+// ─── Apply Background Color ─────────────────────────────────
 delegate(detailContainer, 'click', '#background-box-container button', (e, el) => {
     const { dateId, taskId } = getNotesTaskIds();
     try {
@@ -300,13 +274,15 @@ delegate(detailContainer, 'click', '#background-box-container button', (e, el) =
     document.querySelector('.background-box')?.classList.remove('btn-no-bg-gray-active');
 });
 
-// save notes on blur
+// ─── Save Notes on Blur ──────────────────────────────────────
 delegate(detailContainer, 'focusout', '#task-notes-area', () => {
+    const notesArea = document.getElementById('task-notes-area');
+    if (notesArea) autoLinkTextNodes(notesArea);
     const { dateId, taskId } = getNotesTaskIds();
     updateTasks(dateId, taskId, '', '', true);
 });
 
-//keypress listener here for notes area
+// ─── Task Notes Keydown ─────────────────────────────────────
 delegate(detailContainer, 'keydown', '#task-notes-area', (e) => {
     try {
         const selection = window.getSelection();
@@ -394,8 +370,3 @@ function getNotesTaskIds() {
 // Context menu delegated listeners (replaces inline onclick handlers)
 document.getElementById('ctx-done-btn')?.addEventListener('click', () => doneSelectedList());
 document.getElementById('ctx-delete-btn')?.addEventListener('click', () => deleteSelectedList());
-
-// CSV Import / Export buttons
-document.getElementById('export-csv-btn')?.addEventListener('click', () => exportCSV());
-document.getElementById('auto-backup-btn')?.addEventListener('click', () => toggleAutoBackup());
-document.getElementById('import-csv-btn')?.addEventListener('click', () => importCSV());

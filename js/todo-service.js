@@ -123,6 +123,23 @@ async function deleteByKey(dbName, storeName, key) {
 }
 
 /**
+ * Generic helper — clear all records from an object store.
+ * @param {string} dbName
+ * @param {string} storeName
+ * @returns {Promise<void>}
+ */
+async function clearStore(dbName, storeName) {
+    const db = await openDB(dbName, storeName);
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, 'readwrite');
+        const store = tx.objectStore(storeName);
+        store.clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+/**
  * Run a transaction against the tasks object store and resolve with the
  * callback result after the transaction commits successfully.
  * @param {(store: IDBObjectStore) => Promise<any>} mutator
@@ -596,5 +613,63 @@ export const TodoService = {
             console.error("TodoService.deleteMarkdownDraft — failed:", error);
             throw error;
         }
+    },
+
+    // ─── Bulk Clear / Reset ──────────────────────────────────
+
+    /**
+     * Delete all date lists and tasks from IndexedDB.
+     * @returns {Promise<void>}
+     */
+    async clearAllDateLists() {
+        try {
+            await clearStore(TASKS_DB_NAME, TASKS_STORE_NAME);
+        } catch (error) {
+            console.error("TodoService.clearAllDateLists — failed:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Delete all notes pages from IndexedDB.
+     * @returns {Promise<void>}
+     */
+    async clearAllNotes() {
+        try {
+            await clearStore(NOTES_DB_NAME, NOTES_STORE_NAME);
+        } catch (error) {
+            console.error("TodoService.clearAllNotes — failed:", error);
+            throw error;
+        }
+    },
+
+    /**
+     * Factory reset: close all cached DB connections, delete all IndexedDB
+     * databases (Tasks, Notes, Backup), clear localStorage, and reload.
+     * @returns {Promise<void>}
+     */
+    async factoryReset() {
+        // Close cached connections so deleteDatabase can proceed
+        for (const [, db] of _dbCache) {
+            try { db.close(); } catch { /* noop */ }
+        }
+        _dbCache.clear();
+
+        const dbNames = [TASKS_DB_NAME, NOTES_DB_NAME, 'BackupDB'];
+        for (const name of dbNames) {
+            try {
+                await new Promise((resolve, reject) => {
+                    const req = indexedDB.deleteDatabase(name);
+                    req.onsuccess = () => resolve();
+                    req.onerror = () => reject(req.error);
+                    req.onblocked = () => resolve();
+                });
+            } catch (error) {
+                console.error(`TodoService.factoryReset — deleteDatabase(${name}) failed:`, error);
+            }
+        }
+
+        localStorage.clear();
+        window.location.reload();
     },
 };

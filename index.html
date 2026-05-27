@@ -13,6 +13,7 @@
         crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="css/main.css">
     <script src="js/theme-toggle.js"></script>
+    <script src="js/font-loader.js"></script>
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
@@ -36,46 +37,12 @@
                 <i class="fa-solid fa-book-open"></i>
                 <span class="btn-title">Markdown Reader</span>
             </a>
-            <button id="create-toggle-btn" class="activity-icon" type="button">
-                <i class="fa-solid fa-plus"></i>
-                <span class="btn-title">Create Date List</span>
-            </button>
-        </div>
-        <div class="activity-bar-bottom">
-            <button id="export-csv-btn" class="activity-icon" type="button">
-                <i class="fa-solid fa-download"></i>
-                <span class="btn-title">Export CSV</span>
-            </button>
-            <button id="auto-backup-btn" class="activity-icon" type="button">
-                <i class="fa-solid fa-clock-rotate-left"></i>
-                <span class="btn-title">Auto Backup</span>
-            </button>
-            <button id="import-csv-btn" class="activity-icon" type="button">
-                <i class="fa-solid fa-upload"></i>
-                <span class="btn-title">Import CSV</span>
-            </button>
-            <div id="mcp-status-indicator" class="activity-icon mcp-status-indicator disconnected"
-                role="status" aria-live="polite">
-                <span class="mcp-status-dot" aria-hidden="true"></span>
-                <span class="btn-title">MCP: disconnected</span>
-            </div>
-            <button id="theme-toggle-btn" class="activity-icon" type="button">
-                <i class="fa-solid fa-sun"></i>
-                <span class="btn-title">Toggle Theme</span>
-            </button>
+            <a href="settings.html" class="activity-icon">
+                <i class="fa-solid fa-gear"></i>
+                <span class="btn-title">Settings</span>
+            </a>
         </div>
     </aside>
-
-    <!-- ─── Create Popover (date picker) ────────────────────────── -->
-    <div id="create-popover" class="create-popover hidden">
-        <div id="todo-date-form">
-            <label class="create-popover-label">New Date List</label>
-            <input type="date" class="form-control" id="todo-date-input">
-            <button id="todo-date-submit" type="button" class="btn btn-sm btn-primary w-full mt-2">
-                <i class="fa-solid fa-plus mr-1"></i>Create
-            </button>
-        </div>
-    </div>
 
     <!-- ─── Floating Alerts ─────────────────────────────────────── -->
     <div class="alerts-floating">
@@ -86,7 +53,15 @@
     <!-- ─── Main Layout (sidebar + content) ─────────────────────── -->
     <div id="app-shell">
         <div id="date-parent-container">
-            <div id="date-list-nav-container"></div>
+            <div id="date-list-nav-container">
+                <div id="create-date-row">
+                    <input type="date" class="form-control" id="todo-date-input">
+                    <button id="todo-date-submit" type="button" class="btn btn-lite-sm btn-no-bg">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+                <div id="date-nav-content"></div>
+            </div>
             <div id="date-list-container"></div>
         </div>
     </div>
@@ -94,15 +69,15 @@
     <div class="offcanvas offcanvas-end" data-bs-scroll="true" data-bs-backdrop="false" id="task-detail-container">
 
     </div>
-    <div id="context-menu">
+    <div id="context-menu" class="context-menu">
 
         <ul class="list-group">
-            <li class="list-group-item"><button id="ctx-done-btn" class="btn btn-sm btn-no-bg">
+            <li class="list-group-item"><button id="ctx-done-btn" class="btn btn-lite-sm btn-no-bg">
                     <i class="fa-solid fa-circle-check mr-2"></i>
                     <span>Mark as Done/Undone</span>
                 </button>
             </li>
-            <li class="list-group-item"><button id="ctx-delete-btn" class="btn btn-sm btn-no-bg">
+            <li class="list-group-item"><button id="ctx-delete-btn" class="btn btn-lite-sm btn-no-bg">
                     <i class="fa-solid fa-trash mr-2"></i>
                     <span>Delete</span>
                 </button>

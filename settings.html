@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+        integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="css/main.css">
+    <script src="js/theme-toggle.js"></script>
+    <script src="js/font-loader.js"></script>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="manifest" href="site.webmanifest">
+</head>
+
+<body>
+
+    <!-- ─── Activity Bar (icon strip, far left) ─────────────────── -->
+    <aside class="activity-bar">
+        <div class="activity-bar-top">
+            <a href="index.html" class="activity-icon">
+                <i class="fa-solid fa-list-check"></i>
+                <span class="btn-title">To-Do List</span>
+            </a>
+            <a href="notes.html" class="activity-icon">
+                <i class="fa-solid fa-note-sticky"></i>
+                <span class="btn-title">Notes</span>
+            </a>
+            <a href="markdown.html" class="activity-icon">
+                <i class="fa-solid fa-book-open"></i>
+                <span class="btn-title">Markdown Reader</span>
+            </a>
+            <a href="settings.html" class="activity-icon active">
+                <i class="fa-solid fa-gear"></i>
+                <span class="btn-title">Settings</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- ─── Floating Alerts ─────────────────────────────────────── -->
+    <div class="alerts-floating">
+        <div id="success-message" class="alert alert-success" role="alert">Success!</div>
+        <div id="failure-message" class="alert alert-danger" role="alert">Failures!</div>
+    </div>
+
+    <!-- ─── Main Layout ──────────────────────────────────────────── -->
+    <div id="app-shell">
+        <div class="settings-layout">
+
+            <!-- Sidebar Nav -->
+            <nav class="settings-nav">
+                <a class="settings-nav-item active" data-target="settings-appearance" tabindex="0" role="button">Appearance</a>
+                <a class="settings-nav-item" data-target="settings-typography" tabindex="0" role="button">Typography</a>
+                <a class="settings-nav-item" data-target="settings-mcp" tabindex="0" role="button">MCP Connection</a>
+                <a class="settings-nav-item" data-target="settings-data" tabindex="0" role="button">Data</a>
+                <a class="settings-nav-item" data-target="settings-about" tabindex="0" role="button">About</a>
+                <a class="settings-nav-item" data-target="settings-docs" tabindex="0" role="button">Documentation</a>
+                <a class="settings-nav-item" data-target="settings-danger" tabindex="0" role="button">Danger Zone</a>
+            </nav>
+
+            <!-- Content Pane -->
+            <div class="settings-content">
+                <h5 class="font-semibold">Settings</h5>
+
+                <!-- ─── Appearance ──────────────────────────── -->
+                <section id="settings-appearance">
+                    <div class="settings-card">
+                        <h6 class="settings-card-title">Appearance</h6>
+                        <div class="settings-row">
+                            <span class="settings-label">Theme</span>
+                            <div class="settings-actions">
+                                <div class="theme-swatch-grid" id="theme-swatch-grid"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ─── Typography ──────────────────────────── -->
+                <section id="settings-typography">
+                    <div class="settings-card">
+                        <h6 class="settings-card-title">Typography</h6>
+                        <div class="settings-row">
+                            <span class="settings-label">Global Font</span>
+                            <div class="settings-actions">
+                                <select id="font-global-select" class="form-control" aria-label="Global font family"></select>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Content Font</span>
+                            <div class="settings-actions">
+                                <select id="font-content-select" class="form-control" aria-label="Content font family"></select>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Global Text Size</span>
+                            <div class="settings-actions">
+                                <div class="settings-slider-group">
+                                    <input type="range" id="font-size-global-slider" class="settings-slider" min="12" max="20" step="1" value="14" aria-label="Global text size">
+                                    <input type="number" id="font-size-global-input" class="settings-size-input" min="12" max="20" step="1" value="14" aria-label="Global text size value">
+                                    <span class="settings-slider-value">px</span>
+                                    <button type="button" class="btn btn-lite-sm btn-no-bg-gray settings-reset-btn" data-target="font-size-global" title="Reset to default">
+                                        <i class="fa-solid fa-rotate-left"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Content Text Size</span>
+                            <div class="settings-actions">
+                                <div class="settings-slider-group">
+                                    <input type="range" id="font-size-content-slider" class="settings-slider" min="12" max="24" step="1" value="14" aria-label="Content text size">
+                                    <input type="number" id="font-size-content-input" class="settings-size-input" min="12" max="24" step="1" value="14" aria-label="Content text size value">
+                                    <span class="settings-slider-value">px</span>
+                                    <button type="button" class="btn btn-lite-sm btn-no-bg-gray settings-reset-btn" data-target="font-size-content" title="Reset to default">
+                                        <i class="fa-solid fa-rotate-left"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ─── MCP Connection ──────────────────────── -->
+                <section id="settings-mcp">
+                    <div class="settings-card">
+                        <h6 class="settings-card-title">MCP Connection</h6>
+                        <div class="settings-row">
+                            <span class="settings-label">WebSocket URL</span>
+                            <div class="settings-actions">
+                                <input type="text" id="mcp-ws-url-input" class="form-control" placeholder="ws://127.0.0.1:8765">
+                                <button id="mcp-ws-save-btn" class="btn btn-lite-sm btn-no-bg" type="button">
+                                    <i class="fa-solid fa-floppy-disk"></i>
+                                    <span class="btn-title">Save</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Status</span>
+                            <div class="settings-actions">
+                                <div id="mcp-status-indicator" class="mcp-status-indicator disconnected"
+                                    role="status" aria-live="polite">
+                                    <span class="mcp-status-dot" aria-hidden="true"></span>
+                                    <span class="mcp-status-label">Disconnected</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ─── Data ────────────────────────────────── -->
+                <section id="settings-data">
+                    <div class="settings-card">
+                        <h6 class="settings-card-title">Data</h6>
+                        <div class="settings-row">
+                            <span class="settings-label">Todo CSV</span>
+                            <div class="settings-actions">
+                                <button id="export-csv-btn" class="btn btn-lite-sm btn-no-bg-gray" type="button">
+                                    <i class="fa-solid fa-download mr-1"></i>Export
+                                </button>
+                                <button id="import-csv-btn" class="btn btn-lite-sm btn-no-bg-gray" type="button">
+                                    <i class="fa-solid fa-upload mr-1"></i>Import
+                                </button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Notes JSON</span>
+                            <div class="settings-actions">
+                                <button id="export-notes-btn" class="btn btn-lite-sm btn-no-bg-gray" type="button">
+                                    <i class="fa-solid fa-download mr-1"></i>Export
+                                </button>
+                                <button id="import-notes-btn" class="btn btn-lite-sm btn-no-bg-gray" type="button">
+                                    <i class="fa-solid fa-upload mr-1"></i>Import
+                                </button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Auto Backup</span>
+                            <div class="settings-actions">
+                                <button id="auto-backup-btn" class="btn btn-lite-sm btn-no-bg-gray" type="button">
+                                    <i class="fa-solid fa-clock-rotate-left mr-1"></i>Toggle
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ─── About ───────────────────────────────── -->
+                <section id="settings-about">
+                    <div class="settings-card">
+                        <h6 class="settings-card-title">About</h6>
+                        <div class="settings-about-row">
+                            <span>Version</span>
+                            <span>1.0.0</span>
+                        </div>
+                        <div class="settings-about-row">
+                            <span>Storage Usage</span>
+                            <span id="storage-usage">Calculating...</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ─── Documentation ─────────────────────────── -->
+                <section id="settings-docs">
+                    <div class="settings-card">
+                        <h6 class="settings-card-title">Documentation</h6>
+                        <div id="readme-content" class="prose"></div>
+                    </div>
+                </section>
+
+                <!-- ─── Danger Zone ─────────────────────────── -->
+                <section id="settings-danger">
+                    <div class="settings-card settings-card-danger">
+                        <h6 class="settings-card-title">Danger Zone</h6>
+                        <div class="settings-row">
+                            <span id="desc-purge-todos" class="settings-label">Purge all todo lists and tasks</span>
+                            <div class="settings-actions">
+                                <button id="purge-todos-btn" class="btn btn-lite-sm btn-no-bg-danger" type="button" aria-describedby="desc-purge-todos">
+                                    <i class="fa-solid fa-trash mr-1"></i>Purge Todos
+                                </button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span id="desc-purge-notes" class="settings-label">Purge all notes pages</span>
+                            <div class="settings-actions">
+                                <button id="purge-notes-btn" class="btn btn-lite-sm btn-no-bg-danger" type="button" aria-describedby="desc-purge-notes">
+                                    <i class="fa-solid fa-trash mr-1"></i>Purge Notes
+                                </button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span id="desc-factory-reset" class="settings-label">Delete everything and start fresh</span>
+                            <div class="settings-actions">
+                                <button id="factory-reset-btn" class="btn btn-lite-sm btn-no-bg-danger" type="button" aria-describedby="desc-factory-reset">
+                                    <i class="fa-solid fa-bomb mr-1"></i>Factory Reset
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </div>
+    </div>
+
+</body>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script type="module" src="js/settings.js"></script>
+
+</html>

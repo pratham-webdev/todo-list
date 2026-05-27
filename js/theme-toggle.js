@@ -1,42 +1,21 @@
-// Theme toggle — persists preference to localStorage
-(function () {
+// theme-toggle.js — applies persisted theme before first paint (multi-theme)
+(() => {
     const STORAGE_KEY = 'theme';
+    const VALID_THEMES = ['dark', 'light', 'dracula', 'monokai', 'one-dark', 'one-dark-flat', 'one-dark-night'];
     const root = document.documentElement;
 
-    function getPreferred() {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) return stored;
-        return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-    }
+    const getPreferred = () => {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored && VALID_THEMES.includes(stored)) { return stored; }
+        } catch (_e) { /* private browsing */ }
+        return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    };
 
-    function apply(theme) {
-        if (theme === 'light') {
-            root.setAttribute('data-theme', 'light');
-        } else {
-            root.removeAttribute('data-theme');
-        }
-        // Swap icon
-        const icon = document.querySelector('#theme-toggle-btn i');
-        if (icon) {
-            icon.className = theme === 'light'
-                ? 'fa-solid fa-moon'
-                : 'fa-solid fa-sun';
-        }
-    }
+    const apply = (theme) => {
+        root.setAttribute('data-theme', theme);
+    };
 
     // Apply immediately to avoid FOUC
     apply(getPreferred());
-
-    // Attach toggle after DOM ready
-    document.addEventListener('DOMContentLoaded', () => {
-        apply(getPreferred()); // re-apply to update icon once DOM is ready
-        const btn = document.getElementById('theme-toggle-btn');
-        if (btn) {
-            btn.addEventListener('click', () => {
-                const next = root.hasAttribute('data-theme') ? 'dark' : 'light';
-                localStorage.setItem(STORAGE_KEY, next);
-                apply(next);
-            });
-        }
-    });
 })();

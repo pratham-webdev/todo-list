@@ -18,7 +18,21 @@ import { formatDateListName, normalizeTaskName } from './task-helpers.js';
 
 // ─── Configuration ───────────────────────────────────────────
 
-const WS_URL = 'ws://127.0.0.1:8765';
+const DEFAULT_WS_URL = 'ws://127.0.0.1:8765';
+
+/**
+ * Read the WebSocket URL from localStorage with validation.
+ * Falls back to the default if the stored value is missing or malformed.
+ * @returns {string}
+ */
+function getWsUrl() {
+    const stored = localStorage.getItem('mcp-ws-url');
+    if (!stored) return DEFAULT_WS_URL;
+    try { new URL(stored); return stored; }
+    catch { return DEFAULT_WS_URL; }
+}
+
+const WS_URL = getWsUrl();
 const RECONNECT_MIN_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 const RECONNECT_FACTOR = 2;
