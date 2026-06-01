@@ -102,15 +102,17 @@ The app includes a **Model Context Protocol (MCP)** integration that lets you ma
 ### How It Works
 
 1. **MCP Server** — a Node.js process (`mcp-server/`) that Claude Desktop connects to via stdio transport. It exposes 18 tools: `get_all_date_lists`, `get_date_list`, `get_tasks_by_status`, `create_date_list`, `add_task`, `update_task`, `mark_task_done`, `mark_all_done`, `delete_task`, `move_tasks`, `batch_update_tasks`, `batch_update_tasks_across_dates`, `batch_update_date_lists`, `preview_overwrite_date_lists`, `confirm_overwrite_date_lists`, `batch_create_date_lists`, `batch_add_tasks`, and `batch_create_date_lists_with_tasks`.
-2. **WebSocket Bridge** — the browser tab opens a WebSocket connection (default `ws://127.0.0.1:8765`) to the MCP server. When Claude sends a command (e.g., "add a task called 'Buy groceries' to today's list"), the server forwards the operation to the browser via WebSocket.
+2. **WebSocket Bridge** — the browser tab opens a WebSocket connection (default `ws://127.0.0.1:8765`) to the MCP server. Only one browser tab holds the active WebSocket connection at a time (single-client constraint enforced by the server). When Claude sends a command (e.g., "add a task called 'Buy groceries' to today's list"), the server forwards the operation to the browser via WebSocket.
 3. **IndexedDB Sync** — the browser-side bridge (`mcp-bridge.js`) executes the operation through `TodoService` — the same data layer the UI uses — ensuring consistency. After every write, `refreshUI()` is called so you see the change in real time.
+4. **Status Relay** — `mcp-bridge.js` writes the connection state to `localStorage`. A lightweight `mcp-status-relay.js` (loaded on all pages) reads this state and injects a status indicator dot into the activity bar — no WebSocket needed on non-index pages. The connection auto-reconnects when the tab regains visibility.
 
 ### Configuration
 
 1. Navigate to **Settings → MCP Connection**.
 2. Enter the WebSocket URL (default: `ws://127.0.0.1:8765`).
 3. Click **Save**. The URL is validated and stored in `localStorage`.
-4. The status indicator shows the current connection state: *Connected* (green), *Connecting* (yellow), or *Disconnected* (red).
+4. The status indicator shows the current connection state: *Connected* (green), *Connecting* (yellow), or *Disconnected* (red). A status dot is also visible in the activity bar on all pages.
+5. **Debug Logging** — toggle via the *Debug Logging* button in the MCP Connection card. When enabled, timestamped `console.debug` messages appear in DevTools for connect/close/message events. Off by default.
 
 ### Batch & Overwrite Tools
 
@@ -130,6 +132,8 @@ The server lives in the `mcp-server/` subfolder and requires:
 - A Firebase service account key (`serviceAccountKey.json`) for Firestore-backed persistent storage.
 - The `FIREBASE_UID` environment variable set to your user ID.
 - Configuration in Claude Desktop's `claude_desktop_config.json` to register the MCP server.
+
+For detailed setup instructions, security model, and troubleshooting, see `mcp-server/README.md`.
 
 ---
 

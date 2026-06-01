@@ -304,12 +304,14 @@ document.getElementById('mcp-ws-save-btn')?.addEventListener('click', () => {
 });
 
 /**
- * Temporarily override the MCP status indicator for save/validation feedback.
- * The live connection state is managed by mcp-status.js (loaded on this page).
+ * Temporarily override the settings-page MCP status indicator for
+ * save/validation feedback. Live connection state is handled by
+ * mcp-status-relay.js which updates both the activity-bar dot and
+ * the #mcp-settings-status element via localStorage.
  * @param {'saved' | 'invalid'} action
  */
 function updateMcpStatus(action) {
-    const indicator = document.getElementById('mcp-status-indicator');
+    const indicator = document.getElementById('mcp-settings-status');
     const label = indicator?.querySelector('.mcp-status-label');
     if (!indicator || !label) return;
 
@@ -321,6 +323,30 @@ function updateMcpStatus(action) {
         indicator.classList.add('disconnected');
         label.textContent = 'Invalid URL';
     }
+}
+
+// ─── MCP Debug Toggle ────────────────────────────────────────
+
+const debugToggle = document.getElementById('mcp-debug-toggle');
+
+if (debugToggle) {
+    // Reflect initial state
+    const isOn = localStorage.getItem('mcp-debug') === '1';
+    debugToggle.setAttribute('aria-pressed', String(isOn));
+    const debugLabel = debugToggle.querySelector('.btn-title');
+    if (debugLabel) debugLabel.textContent = isOn ? 'On' : 'Off';
+
+    debugToggle.addEventListener('click', () => {
+        try {
+            const nowOn = localStorage.getItem('mcp-debug') !== '1';
+            localStorage.setItem('mcp-debug', nowOn ? '1' : '');
+            debugToggle.setAttribute('aria-pressed', String(nowOn));
+            const label = debugToggle.querySelector('.btn-title');
+            if (label) label.textContent = nowOn ? 'On' : 'Off';
+        } catch (err) {
+            console.error('settings.js — debug toggle failed:', err);
+        }
+    });
 }
 
 // ─── Data ────────────────────────────────────────────────────

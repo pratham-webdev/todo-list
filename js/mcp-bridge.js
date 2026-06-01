@@ -40,6 +40,28 @@ const RECONNECT_FACTOR = 2;
 const STATUS_TODO      = 1001;
 const STATUS_COMPLETED = 1004;
 
+/** Inactivity watchdog — if no WS message for this long, assume connection is dead */
+const WATCHDOG_TIMEOUT_MS = 45_000;
+
+// ─── Debug Logging ───────────────────────────────────────────
+
+/**
+ * Check whether MCP debug logging is enabled (toggled in Settings).
+ * @returns {boolean}
+ */
+function isDebug() {
+    try { return localStorage.getItem('mcp-debug') === '1'; }
+    catch { return false; }
+}
+
+/**
+ * Emit a timestamped debug log if debug mode is enabled.
+ * @param {...any} args
+ */
+function dbg(...args) {
+    if (isDebug()) console.debug(`[MCP ${new Date().toISOString()}]`, ...args);
+}
+
 // ─── Sanitization ────────────────────────────────────────────
 
 /** Normalize an incoming plain-text task name for storage. */
@@ -386,14 +408,22 @@ const HANDLERS = Object.freeze({
 const STATUS_STATES = Object.freeze(['connected', 'connecting', 'disconnected']);
 
 /**
- * Toggle the status indicator's class + tooltip text. Safe to call before
- * the DOM is ready (no-ops silently if the element isn't in the tree yet).
- * Writes tooltip text into the nested .btn-title span so the repo's
- * built-in tooltip component handles the hover display.
+ * Update the status indicator on the current page and persist to
+ * localStorage so mcp-status-relay.js on other pages stays in sync.
+ * Safe to call before the DOM is ready — no-ops silently.
  * @param {'connected' | 'connecting' | 'disconnected'} state
  * @param {string} [tooltip] - optional override for the tooltip text
  */
 function setStatus(state, tooltip) {
+    const text = tooltip ?? `MCP: ${state}`;
+
+    // Persist for cross-page relay (mcp-status-relay.js reads these)
+    try {
+        localStorage.setItem('mcp-state', state);
+        localStorage.setItem('mcp-state-text', text);
+    } catch { /* quota — non-critical */ }
+
+    // Update the activity-bar indicator (injected by mcp-status-relay.js)
     const el = document.getElementById('mcp-status-indicator');
     if (!el) return;
 
@@ -401,14 +431,37 @@ function setStatus(state, tooltip) {
     el.classList.add(state);
 
     const tip = el.querySelector('.btn-title');
-    if (tip) tip.textContent = tooltip ?? `MCP: ${state}`;
+    if (tip) tip.textContent = text;
 }
 
 // ─── WebSocket Client ────────────────────────────────────────
 
 /** @type {WebSocket | null} */
 let ws = null;
+
+/** @type {number} */
 let reconnectDelay = RECONNECT_MIN_MS;
+
+/** @type {ReturnType<typeof setTimeout> | null} - stored so we can cancel */
+let reconnectTimer = null;
+
+/** @type {ReturnType<typeof setTimeout> | null} - inactivity watchdog */
+let watchdogTimer = null;
+
+/** Reset the inactivity watchdog — called on every incoming message. */
+function resetWatchdog() {
+    if (watchdogTimer) clearTimeout(watchdogTimer);
+    watchdogTimer = setTimeout(() => {
+        dbg('watchdog — no message for', WATCHDOG_TIMEOUT_MS, 'ms, closing stale socket');
+        try { ws?.close(4000, 'Inactivity watchdog'); } catch { /* noop */ }
+    }, WATCHDOG_TIMEOUT_MS);
+}
+
+/** Clear all pending timers (reconnect + watchdog). */
+function clearTimers() {
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (watchdogTimer)  { clearTimeout(watchdogTimer);  watchdogTimer = null;  }
+}
 
 /**
  * Connect (or re-connect) to the MCP server. Retries with exponential backoff
@@ -416,7 +469,11 @@ let reconnectDelay = RECONNECT_MIN_MS;
  * should work normally without it.
  */
 function connect() {
+    // Cancel any pending reconnect so we don't double-connect
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+
     setStatus('connecting', `MCP: connecting to ${WS_URL}`);
+    dbg('connect —', WS_URL);
 
     try {
         ws = new WebSocket(WS_URL);
@@ -429,19 +486,27 @@ function connect() {
     ws.addEventListener('open', () => {
         reconnectDelay = RECONNECT_MIN_MS;
         setStatus('connected', `MCP: connected to ${WS_URL}`);
+        dbg('open — connected');
+        resetWatchdog();
     });
 
-    ws.addEventListener('message', (event) => handleMessage(event.data));
+    ws.addEventListener('message', (event) => {
+        resetWatchdog();
+        handleMessage(event.data);
+    });
 
     ws.addEventListener('close', (event) => {
         ws = null;
+        if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null; }
         setStatus('disconnected', `MCP: disconnected (code ${event.code})`);
+        dbg('close — code', event.code, event.reason || '');
         scheduleReconnect();
     });
 
-    ws.addEventListener('error', () => {
-        // The `close` handler runs next and schedules the reconnect, so this
-        // is intentionally low-noise — just swallow.
+    ws.addEventListener('error', (event) => {
+        // The `close` handler runs next and schedules the reconnect.
+        // Log in debug mode so the error isn't completely invisible.
+        dbg('error —', event);
     });
 }
 
@@ -449,7 +514,8 @@ function connect() {
 function scheduleReconnect() {
     const delay = reconnectDelay;
     reconnectDelay = Math.min(reconnectDelay * RECONNECT_FACTOR, RECONNECT_MAX_MS);
-    setTimeout(connect, delay);
+    dbg('scheduleReconnect — next attempt in', delay, 'ms');
+    reconnectTimer = setTimeout(connect, delay);
 }
 
 /**
@@ -478,18 +544,22 @@ async function handleMessage(raw) {
         return;
     }
 
+    dbg('message in —', method, `id=${id}`);
+
     try {
         const result = await handler(params ?? {});
         send({ id, result: result ?? null });
+        dbg('response out — ok', `id=${id}`);
     } catch (err) {
         console.error(`mcp-bridge.${method} —`, err);
         send({ id, error: err instanceof Error ? err.message : String(err) });
+        dbg('response out — error', `id=${id}`, err);
     }
 }
 
 /**
  * Send a JSON envelope to the MCP server, if still connected.
- * @param {object} payload
+ * @param {{ id: string, result?: unknown, error?: string }} payload
  */
 function send(payload) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -502,6 +572,26 @@ function send(payload) {
         console.error('mcp-bridge.send — failed:', err);
     }
 }
+
+// ─── Lifecycle ───────────────────────────────────────────────
+
+// Graceful close on page unload so the server immediately frees the slot
+window.addEventListener('beforeunload', () => {
+    clearTimers();
+    try { ws?.close(1000, 'Page unloading'); } catch { /* noop */ }
+});
+
+// Visibility-aware reconnect — when the tab regains focus, if the socket
+// is gone (e.g. OS killed it while backgrounded), reconnect immediately.
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (ws && ws.readyState === WebSocket.OPEN) return;
+
+    dbg('visibilitychange — tab visible, socket not open, reconnecting');
+    clearTimers();
+    reconnectDelay = RECONNECT_MIN_MS;
+    connect();
+});
 
 // ─── Bootstrap ───────────────────────────────────────────────
 

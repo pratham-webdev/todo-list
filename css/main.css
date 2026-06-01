@@ -926,10 +926,18 @@ select {
 .mcp-status-indicator {
   cursor: default;
   pointer-events: auto;
-  /* keep hover so native tooltip shows */
 
   &:hover {
     background: transparent;
+  }
+
+  & .mcp-status-dot {
+    display: block;
+    width: .625rem;
+    height: .625rem;
+    border-radius: 50%;
+    background: var(--actbar-icon);
+    transition: background-color .2s ease, box-shadow .2s ease;
   }
 
   &.connected .mcp-status-dot {
@@ -945,15 +953,11 @@ select {
     background: var(--actbar-icon);
     opacity: .55;
   }
-}
 
-.mcp-status-dot {
-  display: block;
-  width: .625rem;
-  height: .625rem;
-  border-radius: 50%;
-  background: var(--actbar-icon);
-  transition: background-color .2s ease, box-shadow .2s ease;
+  & .mcp-status-label {
+    font-size: .75rem;
+    color: var(--text-secondary);
+  }
 }
 
 /* ─── Create Date Row (sidebar inline) ──────────────────────── */
@@ -2145,11 +2149,6 @@ code+div {
   font-size: .75rem;
   color: var(--text-secondary);
   text-align: right;
-}
-
-.mcp-status-label {
-  font-size: .75rem;
-  color: var(--text-secondary);
 }
 
 .settings-actions .mcp-status-indicator {

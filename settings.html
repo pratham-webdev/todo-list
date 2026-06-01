@@ -144,11 +144,21 @@
                         <div class="settings-row">
                             <span class="settings-label">Status</span>
                             <div class="settings-actions">
-                                <div id="mcp-status-indicator" class="mcp-status-indicator disconnected"
+                                <div id="mcp-settings-status" class="mcp-status-indicator disconnected"
                                     role="status" aria-live="polite">
                                     <span class="mcp-status-dot" aria-hidden="true"></span>
                                     <span class="mcp-status-label">Disconnected</span>
                                 </div>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Debug Logging</span>
+                            <div class="settings-actions">
+                                <button id="mcp-debug-toggle" class="btn btn-lite-sm btn-no-bg" type="button"
+                                    aria-pressed="false">
+                                    <i class="fa-solid fa-bug"></i>
+                                    <span class="btn-title">Off</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -251,7 +261,7 @@
 
 </body>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script type="module" src="js/mcp-status.js"></script>
+<script type="module" src="js/mcp-status-relay.js"></script>
 <script type="module" src="js/settings.js"></script>
 
 </html>
