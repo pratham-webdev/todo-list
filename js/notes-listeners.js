@@ -555,3 +555,59 @@ document.addEventListener('click', (e) => {
         closeAllContextMenus();
     }
 });
+
+// ─── Sections FAB (responsive floating widget) ──────────────
+
+const sectionsFab = document.getElementById('sections-nav-fab');
+const sectionsFabPanel = document.getElementById('sections-nav-fab-panel');
+const sectionsFabBody = document.getElementById('sections-nav-fab-body');
+const sectionsFabClose = document.getElementById('sections-nav-fab-close');
+
+/**
+ * Toggle the sections floating popover open/closed.
+ * Clones the live section-toggle sidebar into the FAB panel body.
+ * @returns {void}
+ */
+function toggleSectionsFab() {
+    const isOpen = sectionsFabPanel?.classList.toggle('nav-fab-open') ?? false;
+    sectionsFab?.setAttribute('aria-expanded', String(isOpen));
+
+    // Sync section toggles into the popover each time it opens
+    if (isOpen && sectionsFabBody) {
+        const source = document.querySelector('.notes-detail-section-toggle-container');
+        if (source) {
+            sectionsFabBody.innerHTML = source.innerHTML;
+        }
+    }
+}
+
+/**
+ * Close the sections floating popover if open.
+ * @returns {void}
+ */
+function closeSectionsFab() {
+    sectionsFabPanel?.classList.remove('nav-fab-open');
+    sectionsFab?.setAttribute('aria-expanded', 'false');
+}
+
+sectionsFab?.addEventListener('click', toggleSectionsFab);
+sectionsFabClose?.addEventListener('click', closeSectionsFab);
+
+// Close on outside click
+document.addEventListener('click', (e) => {
+    if (
+        sectionsFabPanel?.classList.contains('nav-fab-open') &&
+        !e.target.closest('#sections-nav-fab-panel') &&
+        !e.target.closest('#sections-nav-fab')
+    ) {
+        closeSectionsFab();
+    }
+});
+
+// Dismiss on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sectionsFabPanel?.classList.contains('nav-fab-open')) {
+        closeSectionsFab();
+        sectionsFab?.focus();
+    }
+});

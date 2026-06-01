@@ -370,3 +370,76 @@ function getNotesTaskIds() {
 // Context menu delegated listeners (replaces inline onclick handlers)
 document.getElementById('ctx-done-btn')?.addEventListener('click', () => doneSelectedList());
 document.getElementById('ctx-delete-btn')?.addEventListener('click', () => deleteSelectedList());
+
+// ─── Date Nav FAB (responsive floating widget) ──────────────
+
+const dateNavFab = document.getElementById('date-nav-fab');
+const dateNavFabPanel = document.getElementById('date-nav-fab-panel');
+const dateNavFabBody = document.getElementById('date-nav-fab-body');
+const dateNavFabClose = document.getElementById('date-nav-fab-close');
+const dateNavSource = document.getElementById('date-nav-content');
+
+/**
+ * Toggle the date-nav floating popover open/closed.
+ * Clones the live nav links into the FAB panel body so it stays in sync.
+ * @returns {void}
+ */
+function toggleDateNavFab() {
+    const isOpen = dateNavFabPanel?.classList.toggle('nav-fab-open') ?? false;
+    dateNavFab?.setAttribute('aria-expanded', String(isOpen));
+
+    // Sync nav links into the popover each time it opens
+    if (isOpen && dateNavSource && dateNavFabBody) {
+        dateNavFabBody.innerHTML = dateNavSource.innerHTML;
+    }
+}
+
+/**
+ * Close the date-nav floating popover if open.
+ * @returns {void}
+ */
+function closeDateNavFab() {
+    dateNavFabPanel?.classList.remove('nav-fab-open');
+    dateNavFab?.setAttribute('aria-expanded', 'false');
+}
+
+dateNavFab?.addEventListener('click', toggleDateNavFab);
+dateNavFabClose?.addEventListener('click', closeDateNavFab);
+
+// Close FAB when a nav link inside the popover is clicked
+if (dateNavFabBody) {
+    dateNavFabBody.addEventListener('click', (e) => {
+        if (e.target.closest('.nav-sidebar-day')) {
+            closeDateNavFab();
+        }
+    });
+}
+
+// ─── Mobile Create Date Row ─────────────────────────────────
+const mobileDateInput = document.getElementById('todo-date-input-mobile');
+if (mobileDateInput) { mobileDateInput.value = getLocalDateInputValue(); }
+
+document.getElementById('todo-date-submit-mobile')?.addEventListener('click', () => {
+    const inputDate = mobileDateInput?.value;
+    if (!inputDate) { return; }
+    createDateList(inputDate, formatDateListName(inputDate));
+});
+
+// Close on outside click
+document.addEventListener('click', (e) => {
+    if (
+        dateNavFabPanel?.classList.contains('nav-fab-open') &&
+        !e.target.closest('#date-nav-fab-panel') &&
+        !e.target.closest('#date-nav-fab')
+    ) {
+        closeDateNavFab();
+    }
+});
+
+// Dismiss on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && dateNavFabPanel?.classList.contains('nav-fab-open')) {
+        closeDateNavFab();
+        dateNavFab?.focus();
+    }
+});

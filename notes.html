@@ -56,6 +56,22 @@
     <div id="notes-detail-container"></div>
   </div>
 
+  <!-- ─── Sections FAB (visible ≤768px) ─────────────────────────── -->
+  <button id="sections-nav-fab" class="nav-fab" type="button"
+      aria-label="Sections" aria-expanded="false" aria-controls="sections-nav-fab-panel">
+      <i class="fa-solid fa-layer-group"></i>
+      <span>Sections</span>
+  </button>
+  <div id="sections-nav-fab-panel" class="nav-fab-panel" role="dialog" aria-label="Section navigation">
+      <div class="nav-fab-panel-header">
+          <span>Sections</span>
+          <button id="sections-nav-fab-close" type="button" aria-label="Close sections">
+              <i class="fa-solid fa-xmark"></i>
+          </button>
+      </div>
+      <div id="sections-nav-fab-body"></div>
+  </div>
+
   <!-- ─── Markdown Section Editor Modal ────────────────────────── -->
   <dialog id="md-section-modal">
     <div class="md-section-modal-toolbar">

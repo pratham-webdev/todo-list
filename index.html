@@ -62,8 +62,31 @@
                 </div>
                 <div id="date-nav-content"></div>
             </div>
-            <div id="date-list-container"></div>
+            <div id="date-list-container">
+                <div id="create-date-row-mobile" class="create-date-row-mobile">
+                    <input type="date" class="form-control" id="todo-date-input-mobile">
+                    <button id="todo-date-submit-mobile" type="button" class="btn btn-lite-sm btn-no-bg">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+            </div>
         </div>
+    </div>
+
+    <!-- ─── Date Nav FAB (visible ≤768px) ────────────────────────── -->
+    <button id="date-nav-fab" class="nav-fab" type="button"
+        aria-label="Quick Navigation" aria-expanded="false" aria-controls="date-nav-fab-panel">
+        <i class="fa-solid fa-compass"></i>
+        <span>Navigate</span>
+    </button>
+    <div id="date-nav-fab-panel" class="nav-fab-panel" role="dialog" aria-label="Date navigation">
+        <div class="nav-fab-panel-header">
+            <span>Quick Navigation</span>
+            <button id="date-nav-fab-close" type="button" aria-label="Close navigation">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div id="date-nav-fab-body"></div>
     </div>
 
     <div class="offcanvas offcanvas-end" data-bs-scroll="true" data-bs-backdrop="false" id="task-detail-container">

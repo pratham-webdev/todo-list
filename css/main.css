@@ -2309,13 +2309,261 @@ code+div {
   }
 }
 
+/* ─── Date Card Layout Helpers ────────────────────────────────── */
+.todo-input-form {
+  flex: 1;
+  min-width: 0;
+}
+
+.create-task-input {
+  width: 100%;
+}
+
+.task-name-container {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.create-date-row-mobile {
+  display: none;
+}
+
+.task-detail-title {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ─── Floating Nav FAB Widget ────────────────────────────────── */
+.nav-fab {
+  position: fixed;
+  bottom: 4rem;
+  right: 1rem;
+  z-index: 1040;
+  display: none;
+  align-items: center;
+  gap: .35rem;
+  padding: .45rem .85rem;
+  border: 1px solid var(--border-dark);
+  border-radius: 1.5rem;
+  background: var(--color-primary);
+  color: var(--text-on-accent);
+  font-size: .75rem;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+
+  &:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+  }
+
+  & i {
+    font-size: .8rem;
+  }
+}
+
+/* Panel shown as floating popover when FAB is toggled */
+.nav-fab-panel {
+  position: fixed;
+  bottom: 7rem;
+  right: 1rem;
+  z-index: 1039;
+  width: min(20rem, calc(100vw - 2rem));
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--surface-dark);
+  border: 1px solid var(--surface-dark-border);
+  border-radius: var(--card-radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .45);
+  display: none;
+  flex-direction: column;
+  padding: .75rem;
+  color: var(--text-on-dark);
+
+  &.nav-fab-open {
+    display: flex;
+  }
+}
+
+.nav-fab-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .5rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--surface-dark-border);
+
+  & span {
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-on-dark);
+  }
+
+  & button {
+    color: var(--text-on-dark-muted);
+    font-size: .8rem;
+    padding: .15rem .35rem;
+    border-radius: var(--button-radius);
+    transition: color .12s, background .12s;
+
+    &:hover {
+      color: var(--text-bright);
+      background: var(--surface-dark-hover);
+    }
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════
    8. Media Queries
    ═══════════════════════════════════════════════════════════════ */
 
-@media screen and (max-width: 720px) {
+/* ─── Tablet ≤768px ──────────────────────────────────────────── */
+@media screen and (max-width: 768px) {
 
-  /* Settings → single column */
+  /* ── Activity bar → bottom tab bar ─── */
+  body {
+    height: 100dvh;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+
+  .activity-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    flex-direction: row;
+    justify-content: center;
+    width: 100%;
+    height: 3rem;
+    padding: 0 .5rem;
+    border-right: none;
+    border-top: 1px solid var(--surface-dark-border);
+  }
+
+  .activity-bar-top,
+  .activity-bar-bottom {
+    flex-direction: row;
+    gap: .75rem;
+  }
+
+  /* Active indicator → top edge instead of left */
+  .activity-icon.active::before {
+    left: .5rem;
+    right: .5rem;
+    top: -.25rem;
+    bottom: auto;
+    width: auto;
+    height: .1875rem;
+    border-radius: 0 0 .1875rem .1875rem;
+  }
+
+  /* Tooltips above icon instead of right-side */
+  .btn-title {
+
+    .activity-icon > & {
+      top: auto;
+      bottom: calc(100% + .5rem);
+      left: 50%;
+      transform: translateX(-50%);
+    }
+  }
+
+  #app-shell {
+    grid-row: 1;
+    grid-column: 1;
+    padding-bottom: 3rem;
+    overflow-y: auto;
+  }
+
+  /* ── FAB visible on tablet ─── */
+  .nav-fab {
+    display: flex;
+  }
+
+  /* ── Date nav → hidden (shown via FAB popover) ─── */
+  #date-parent-container {
+    grid-template-columns: 1fr;
+  }
+
+  #date-list-nav-container {
+    display: none;
+  }
+
+  /* ── Notes sections → hidden (shown via FAB popover) ─── */
+  #notes-detail-area-parent {
+    grid-template-columns: 1fr;
+  }
+
+  .notes-detail-section-toggle-container {
+    display: none;
+  }
+
+  #notes-detail-area {
+    height: calc(100dvh - 13rem);
+  }
+
+  /* ── Date card → compact header ─── */
+  .date-item {
+    padding: .75rem;
+
+    & > .flex.justify-between {
+      flex-direction: column;
+      gap: .5rem;
+    }
+
+    & h4 {
+      font-size: .95rem;
+    }
+
+    & .task-name {
+      flex: 1;
+      width: auto;
+      font-size: .825rem;
+    }
+
+  }
+
+  /* ── Mobile create-date-row visible ─── */
+  .create-date-row-mobile {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    padding: .5rem .75rem;
+    margin-bottom: .5rem;
+    border-bottom: 1px solid var(--surface-dark-border);
+
+    & .form-control {
+      flex: 1;
+      background: var(--bg-canvas);
+      border-color: var(--overlay-border);
+      color: var(--text-on-dark);
+      font-size: .8rem;
+
+      &:focus {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px var(--primary-tint-medium);
+      }
+    }
+  }
+
+  /* ── Offcanvas ─── */
+  .offcanvas {
+    width: 100vw;
+  }
+
+  .offcanvas-header {
+    flex-wrap: wrap;
+    gap: .25rem;
+  }
+
+  /* ── Settings → single column ─── */
   .settings-layout {
     grid-template-columns: 1fr;
   }
@@ -2341,21 +2589,17 @@ code+div {
     padding: .75rem;
   }
 
-  /* Offcanvas */
-  .offcanvas {
-    width: 100vw;
+  .settings-row {
+    flex-wrap: wrap;
   }
 
-  /* Sidebar → stacked */
-  #date-parent-container {
-    grid-template-columns: 1fr;
+  .settings-actions .form-control {
+    min-width: 0;
+    width: 100%;
   }
 
-  #date-list-nav-container {
-    position: relative;
-    height: auto;
-    max-height: 12.5rem;
-    top: 0;
+  .settings-slider {
+    width: 100%;
   }
 
   #auth-container {
@@ -2364,20 +2608,7 @@ code+div {
     flex-wrap: wrap;
   }
 
-  /* Date cards */
-  .date-item {
-    padding: .75rem !important;
-
-    & h4 {
-      font-size: .95rem;
-    }
-
-    & .task-name {
-      font-size: .825rem;
-    }
-  }
-
-  /* Markdown reader */
+  /* ── Markdown reader ─── */
   .md-editor {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr 1fr;
@@ -2387,25 +2618,35 @@ code+div {
     border-right: none;
     border-bottom: 1px solid var(--border-dark);
   }
+
+  .md-section-modal-toolbar {
+    flex-wrap: wrap;
+  }
+
+  /* ── Nav sidebar — larger touch targets ─── */
+  .nav-sidebar-year {
+    font-size: .8rem;
+    padding: .45rem .75rem;
+  }
+
+  .nav-sidebar-heading {
+    font-size: .8rem;
+    padding: .4rem .75rem;
+  }
+
+  .nav-sidebar-day {
+    font-size: .85rem;
+    padding: .5rem .75rem;
+  }
 }
 
+/* ─── Mobile ≤420px ──────────────────────────────────────────── */
 @media screen and (max-width: 420px) {
 
   /* Offcanvas */
   .offcanvas,
   .offcanvas-end {
     width: 100vw !important;
-  }
-
-  /* Activity bar */
-  .activity-bar {
-    width: 2.5rem;
-  }
-
-  .activity-icon {
-    width: 2rem;
-    height: 2rem;
-    font-size: .9rem;
   }
 
   /* Content */
@@ -2417,13 +2658,47 @@ code+div {
     padding: .5rem;
   }
 
-  #date-list-nav-container {
-    max-height: 60vh;
-  }
-
   /* Buttons */
   .btn {
     padding: .35rem .6rem;
     font-size: .85rem;
+  }
+
+  /* RTF toolbar dropdown panels — clamp to viewport */
+  .task-box-ui-layout {
+    left: 0;
+    right: auto;
+    max-width: calc(100vw - 2rem);
+  }
+
+  /* Floating alerts — full-width */
+  .alerts-floating {
+    right: .5rem;
+    left: .5rem;
+    width: auto;
+  }
+
+  /* FAB position adjusts for smaller screen */
+  .nav-fab {
+    bottom: 3.75rem;
+    right: .5rem;
+  }
+
+  .nav-fab-panel {
+    bottom: 6.5rem;
+    right: .5rem;
+    width: calc(100vw - 1rem);
+  }
+}
+
+/* ─── Reduced Motion ─────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+
+  .nav-fab,
+  .nav-fab-panel,
+  .offcanvas,
+  .activity-bar,
+  .activity-icon {
+    transition: none;
   }
 }

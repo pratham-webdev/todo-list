@@ -417,11 +417,14 @@ const STATUS_STATES = Object.freeze(['connected', 'connecting', 'disconnected'])
 function setStatus(state, tooltip) {
     const text = tooltip ?? `MCP: ${state}`;
 
-    // Persist for cross-page relay (mcp-status-relay.js reads these)
-    try {
-        localStorage.setItem('mcp-state', state);
-        localStorage.setItem('mcp-state-text', text);
-    } catch { /* quota — non-critical */ }
+    // Persist for cross-page relay (mcp-status-relay.js reads these).
+    // Skip during unload so navigating away doesn't overwrite 'connected'.
+    if (!isUnloading) {
+        try {
+            localStorage.setItem('mcp-state', state);
+            localStorage.setItem('mcp-state-text', text);
+        } catch { /* quota — non-critical */ }
+    }
 
     // Update the activity-bar indicator (injected by mcp-status-relay.js)
     const el = document.getElementById('mcp-status-indicator');
@@ -447,6 +450,9 @@ let reconnectTimer = null;
 
 /** @type {ReturnType<typeof setTimeout> | null} - inactivity watchdog */
 let watchdogTimer = null;
+
+/** @type {boolean} Suppresses localStorage writes during page unload */
+let isUnloading = false;
 
 /** Reset the inactivity watchdog — called on every incoming message. */
 function resetWatchdog() {
@@ -577,6 +583,7 @@ function send(payload) {
 
 // Graceful close on page unload so the server immediately frees the slot
 window.addEventListener('beforeunload', () => {
+    isUnloading = true;
     clearTimers();
     try { ws?.close(1000, 'Page unloading'); } catch { /* noop */ }
 });
